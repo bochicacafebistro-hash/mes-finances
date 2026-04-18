@@ -165,6 +165,13 @@ const TRANSLATIONS = {
   sub_unconfirm:         { fr: "Retirer de la liste",  es: "Quitar de la lista" },
   sub_none_detected:     { fr: "Aucun abonnement détecté pour l'instant. Il faut au moins 2 paiements du même marchand pour détecter un abonnement.", es: "Ninguna suscripción detectada por ahora. Se necesitan al menos 2 pagos del mismo comerciante para detectar una suscripción." },
   sub_auto_detected:     { fr: "Détectés automatiquement", es: "Detectados automáticamente" },
+  sub_view_transactions: { fr: "Voir les transactions", es: "Ver las transacciones" },
+  sub_bulk_recategorize: { fr: "Reclasser toutes",     es: "Reclasificar todas" },
+  sub_bulk_title:        { fr: "Reclasser {n} transaction{s}", es: "Reclasificar {n} transaccion{s}" },
+  sub_bulk_confirm:      { fr: "Mettre à jour les {n} transaction{s} de ce groupe vers la catégorie « {cat} » ?", es: "¿Actualizar las {n} transacciones de este grupo a la categoría « {cat} »?" },
+  sub_bulk_done:         { fr: "✅ {n} transaction{s} reclassée{s}", es: "✅ {n} transacciones reclasificadas" },
+  sub_detail_title:      { fr: "Détail du marchand",   es: "Detalle del comerciante" },
+  tx_edit_note:          { fr: "💡 Clique une transaction pour modifier sa catégorie, description ou ajouter une note", es: "💡 Haz clic en una transacción para modificar su categoría, descripción o agregar una nota" },
 
   // ── Catégorie détail (modal depuis top dépenses) ──
   cat_detail_title:      { fr: "Détail de la catégorie", es: "Detalle de la categoría" },

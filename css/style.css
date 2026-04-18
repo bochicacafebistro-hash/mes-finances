@@ -2637,6 +2637,14 @@ body.dark {
   border: 1px solid var(--border);
   border-radius: 10px;
   padding: 14px 16px;
+  transition: background 0.15s ease, transform 0.15s ease;
+}
+.sub-row--clickable {
+  cursor: pointer;
+}
+.sub-row--clickable:hover {
+  background: var(--surface2);
+  transform: translateX(2px);
 }
 .sub-row__main {
   flex: 1;

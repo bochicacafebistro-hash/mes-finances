@@ -222,7 +222,7 @@ function renderDashRecentTx(recent) {
         const acc = accounts.find(a => a.id === tx.accountId);
         const sign = tx.type === "income" ? "+" : tx.type === "expense" ? "-" : "";
         const color = tx.type === "income" ? "var(--status-green)" : tx.type === "expense" ? "var(--status-red)" : "var(--text2)";
-        return `<li class="dash-list__item">
+        return `<li class="dash-list__item dash-list__item--clickable" onclick="openTransactionModal('${tx.id}')" role="button" tabindex="0" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();openTransactionModal('${tx.id}')}">
           <span class="dash-list__name">
             ${esc(tx.description || tCategoryName(cat) || "?")}<br/>
             <small style="color:var(--text3);font-size:10px">${fmtDateShort(tx.date)} · ${esc(acc?.name || "")}</small>
@@ -648,6 +648,16 @@ async function saveTransaction(id) {
     await db.collection("transactions").doc(nid).set({ ...data, id: nid, createdAt: firebase.firestore.FieldValue.serverTimestamp() });
   }
   closeModal();
+
+  // Si on venait d'une modal de détail (abonnement, catégorie), on y retourne
+  if (window._txEditReturn) {
+    const ret = window._txEditReturn;
+    window._txEditReturn = null;
+    setTimeout(() => {
+      if (ret.page === "sub") openSubscriptionDetailModal(ret.key);
+      else if (ret.page === "cat") openCategoryDetailModal(ret.key);
+    }, 100);
+  }
 }
 
 // ═══════════════════════════════════════════════════════════════
@@ -985,7 +995,7 @@ function openCategoryDetailModal(categoryId) {
       <div style="max-height:360px;overflow-y:auto;margin:0 -4px">
         ${txs.length === 0 ? `<div class="empty">Aucune transaction</div>` : txs.map(tx => {
           const acc = accounts.find(a => a.id === tx.accountId);
-          return `<div class="tx-item" style="border-bottom:1px solid var(--border)" onclick="closeModal();openTransactionModal('${tx.id}')" role="button" tabindex="0">
+          return `<div class="tx-item" style="border-bottom:1px solid var(--border)" onclick="closeModal();openTransactionModalThenReturnTo('${tx.id}','cat','${categoryId}')" role="button" tabindex="0">
             <div class="tx-item__body">
               <div class="tx-item__top">
                 <span class="tx-item__desc">${esc(tx.description || "—")}</span>
@@ -993,6 +1003,7 @@ function openCategoryDetailModal(categoryId) {
               </div>
               <div class="tx-item__bottom">
                 <span class="tx-account-name">${fmtDateLong(tx.date)} · ${esc(acc?.name || "")}</span>
+                ${tx.notes ? `<span style="color:var(--text2);font-style:italic;font-size:11px">📝 ${esc(tx.notes)}</span>` : ""}
               </div>
             </div>
           </div>`;
@@ -1225,7 +1236,7 @@ function renderSubSection(title, subs, kind) {
     const acc = accounts.find(a => a.id === sub.accountId);
     const freqLabel = t("sub_" + sub.frequency) || sub.frequency;
 
-    h += `<div class="sub-row" style="border-left:4px solid ${cat?.color || 'var(--text3)'}">
+    h += `<div class="sub-row sub-row--clickable" style="border-left:4px solid ${cat?.color || 'var(--text3)'}" onclick="openSubscriptionDetailModal('${sub.key}')" role="button" tabindex="0" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();openSubscriptionDetailModal('${sub.key}')}">
       <div class="sub-row__main">
         <div class="sub-row__name">${esc(sub.name)}</div>
         <div class="sub-row__meta">
@@ -1241,7 +1252,7 @@ function renderSubSection(title, subs, kind) {
         <div class="sub-row__amount">${fmtMoney(sub.amount)}</div>
         <div class="sub-row__monthly">≈ ${fmtMoney(sub.monthlyCost)}/mois</div>
       </div>
-      <div class="sub-row__actions">
+      <div class="sub-row__actions" onclick="event.stopPropagation()">
         ${kind === "suggestion" ? `
           <button class="action-btn action-btn--primary" onclick="confirmSubscription('${sub.key}','${esc(sub.name).replace(/'/g,"\\'")}','${sub.amount}','${sub.frequency}','${sub.accountId||""}','${sub.categoryId||""}')" title="${t("sub_confirm")}">${icon("check", 14)}</button>
           <button class="action-btn" onclick="ignoreSubscription('${sub.key}','${esc(sub.name).replace(/'/g,"\\'")}')" title="${t("sub_ignore")}">${icon("x", 14)}</button>
@@ -1253,6 +1264,133 @@ function renderSubSection(title, subs, kind) {
   });
   h += `</div>`;
   return h;
+}
+
+// ═══════════════════════════════════════════════════════════════
+// MODAL DÉTAIL D'UN ABONNEMENT (toutes les transactions liées)
+// ═══════════════════════════════════════════════════════════════
+
+function openSubscriptionDetailModal(subKey) {
+  if (!subKey) return;
+  // Re-détecte pour récupérer les IDs frais
+  const detected = detectRecurringTransactions();
+  const sub = detected.find(s => s.key === subKey);
+  if (!sub) return alert("Groupe introuvable.");
+
+  // Récupère les transactions complètes
+  const txs = sub.transactionIds
+    .map(id => transactions.find(tx => tx.id === id))
+    .filter(Boolean)
+    .sort((a, b) => (b.date || "").localeCompare(a.date || ""));
+
+  const cat = categories.find(c => c.id === sub.categoryId);
+  const total = txs.reduce((s, tx) => s + Number(tx.amount || 0), 0);
+  const freqLabel = t("sub_" + sub.frequency) || sub.frequency;
+
+  showModal(`<div class="modal" style="max-width:680px">
+    <div class="modal-header">
+      <h3 class="icon-inline">${icon("refresh", 18)} ${esc(sub.name)}</h3>
+      <button class="close-btn" onclick="closeModal()" aria-label="${t("close")}">${icon("x", 18)}</button>
+    </div>
+    <div style="padding:0 4px">
+      <!-- Résumé -->
+      <div style="display:flex;gap:16px;flex-wrap:wrap;align-items:baseline;margin-bottom:12px;padding:12px;background:var(--surface2);border-radius:10px">
+        <div>
+          <div style="font-size:11px;color:var(--text3);text-transform:uppercase;letter-spacing:.5px">Total payé</div>
+          <div style="font-family:var(--font-heading);font-size:22px;font-weight:700;color:var(--accent)">${fmtMoney(total)}</div>
+        </div>
+        <div>
+          <div style="font-size:11px;color:var(--text3);text-transform:uppercase;letter-spacing:.5px">Coût mensuel</div>
+          <div style="font-family:var(--font-heading);font-size:18px;font-weight:600">≈ ${fmtMoney(sub.monthlyCost)}</div>
+        </div>
+        <div>
+          <div style="font-size:11px;color:var(--text3);text-transform:uppercase;letter-spacing:.5px">Fréquence</div>
+          <div style="font-size:14px;font-weight:600">${freqLabel} · ${sub.occurrences} ${t("sub_occurrences")}</div>
+        </div>
+        ${cat ? `<div>
+          <div style="font-size:11px;color:var(--text3);text-transform:uppercase;letter-spacing:.5px">Catégorie actuelle</div>
+          <span class="tx-pill" style="background:${cat.color}15;color:${cat.color};border-color:${cat.color}40;display:inline-block;margin-top:4px">${esc(tCategoryName(cat))}</span>
+        </div>` : ""}
+      </div>
+
+      <!-- Bouton bulk recategorize -->
+      <div style="display:flex;gap:8px;margin-bottom:12px;flex-wrap:wrap;align-items:center">
+        <select id="bulk-cat-select" style="padding:8px 12px;border:1px solid var(--border);border-radius:8px;background:var(--surface);color:var(--text);font-size:13px;flex:1;min-width:200px">
+          <option value="">— ${t("tx_field_category")} —</option>
+          ${categories.filter(c => c.type === "expense").map(c => `
+            <option value="${c.id}" ${sub.categoryId === c.id ? "selected" : ""}>${tCategoryName(c)}</option>
+          `).join("")}
+        </select>
+        <button class="btn btn-primary" onclick="bulkRecategorizeSubscription('${subKey}')">${icon("refresh", 14)} ${t("sub_bulk_recategorize")}</button>
+      </div>
+
+      <div style="font-size:12px;color:var(--text3);margin-bottom:8px">${t("tx_edit_note")}</div>
+
+      <!-- Liste des transactions -->
+      <div style="max-height:380px;overflow-y:auto;margin:0 -4px">
+        ${txs.map(tx => {
+          const acc = accounts.find(a => a.id === tx.accountId);
+          const txCat = categories.find(c => c.id === tx.categoryId);
+          return `<div class="tx-item" style="border-bottom:1px solid var(--border)" onclick="closeModal();openTransactionModalThenReturnTo('${tx.id}','sub','${subKey}')" role="button" tabindex="0">
+            <div class="tx-item__body">
+              <div class="tx-item__top">
+                <span class="tx-item__desc">${esc(tx.description || "—")}</span>
+                <span class="tx-item__amount" style="color:var(--status-red)">−${fmtMoney(tx.amount)}</span>
+              </div>
+              <div class="tx-item__bottom">
+                ${txCat ? `<span class="tx-pill" style="background:${txCat.color}15;color:${txCat.color};border-color:${txCat.color}40">${esc(tCategoryName(txCat))}</span>` : ""}
+                <span class="tx-account-name">${fmtDateLong(tx.date)} · ${esc(acc?.name || "")}</span>
+                ${tx.notes ? `<span style="color:var(--text2);font-style:italic">📝 ${esc(tx.notes)}</span>` : ""}
+              </div>
+            </div>
+          </div>`;
+        }).join("")}
+      </div>
+    </div>
+  </div>`);
+}
+
+// Bulk re-categorize : met à jour toutes les transactions d'un groupe
+async function bulkRecategorizeSubscription(subKey) {
+  const newCatId = document.getElementById("bulk-cat-select").value;
+  if (!newCatId) return alert(t("err_select_category"));
+  const newCat = categories.find(c => c.id === newCatId);
+  if (!newCat) return;
+
+  const detected = detectRecurringTransactions();
+  const sub = detected.find(s => s.key === subKey);
+  if (!sub) return;
+
+  const txIds = sub.transactionIds;
+  const msg = t("sub_bulk_confirm", { n: txIds.length, s: txIds.length > 1 ? "s" : "", cat: tCategoryName(newCat) });
+
+  openConfirm(t("sub_bulk_title", { n: txIds.length, s: txIds.length > 1 ? "s" : "" }), msg, async () => {
+    // Update en batch (Firestore limite à 500 par batch)
+    const batch = db.batch();
+    txIds.forEach(id => {
+      batch.update(db.collection("transactions").doc(id), {
+        categoryId: newCatId,
+        updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+      });
+    });
+    await batch.commit();
+
+    // Si l'abonnement est confirmé, mettre à jour aussi sa catégorie
+    const subState = subscriptions.find(s => s.key === subKey);
+    if (subState) {
+      await db.collection("subscriptions").doc(subState.id).update({ categoryId: newCatId });
+    }
+
+    alert(t("sub_bulk_done", { n: txIds.length, s: txIds.length > 1 ? "s" : "" }));
+  });
+}
+
+// Wrapper pour ouvrir la modal de transaction et revenir après save
+// (pour le moment on ferme juste la modal de détail et on ouvre la modal de transaction normalement)
+function openTransactionModalThenReturnTo(txId, returnPage, returnKey) {
+  // On stocke le retour souhaité
+  window._txEditReturn = { page: returnPage, key: returnKey };
+  openTransactionModal(txId);
 }
 
 async function confirmSubscription(key, name, amount, frequency, accountId, categoryId) {
