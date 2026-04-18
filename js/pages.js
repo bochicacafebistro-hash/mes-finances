@@ -995,7 +995,7 @@ function openCategoryDetailModal(categoryId) {
       <div style="max-height:360px;overflow-y:auto;margin:0 -4px">
         ${txs.length === 0 ? `<div class="empty">Aucune transaction</div>` : txs.map(tx => {
           const acc = accounts.find(a => a.id === tx.accountId);
-          return `<div class="tx-item" style="border-bottom:1px solid var(--border)" onclick="closeModal();openTransactionModalThenReturnTo('${tx.id}','cat','${categoryId}')" role="button" tabindex="0">
+          return `<div class="tx-item tx-item--editable" style="border-bottom:1px solid var(--border)" onclick="editTxFromModal('${tx.id}','cat','${categoryId}')" role="button" tabindex="0" title="${t("edit")}">
             <div class="tx-item__body">
               <div class="tx-item__top">
                 <span class="tx-item__desc">${esc(tx.description || "—")}</span>
@@ -1006,6 +1006,7 @@ function openCategoryDetailModal(categoryId) {
                 ${tx.notes ? `<span style="color:var(--text2);font-style:italic;font-size:11px">📝 ${esc(tx.notes)}</span>` : ""}
               </div>
             </div>
+            <button class="action-btn action-btn--primary" onclick="event.stopPropagation();editTxFromModal('${tx.id}','cat','${categoryId}')" title="${t("edit")}" aria-label="${t("edit")}">${icon("pencil", 14)}</button>
           </div>`;
         }).join("")}
       </div>
@@ -1236,7 +1237,7 @@ function renderSubSection(title, subs, kind) {
     const acc = accounts.find(a => a.id === sub.accountId);
     const freqLabel = t("sub_" + sub.frequency) || sub.frequency;
 
-    h += `<div class="sub-row sub-row--clickable" style="border-left:4px solid ${cat?.color || 'var(--text3)'}" onclick="openSubscriptionDetailModal('${sub.key}')" role="button" tabindex="0" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();openSubscriptionDetailModal('${sub.key}')}">
+    h += `<div class="sub-row sub-row--clickable" style="border-left:4px solid ${cat?.color || 'var(--text3)'}" onclick="openSubscriptionDetailModal('${sub.key}')" role="button" tabindex="0" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();openSubscriptionDetailModal('${sub.key}')}" title="${t("sub_view_transactions")}">
       <div class="sub-row__main">
         <div class="sub-row__name">${esc(sub.name)}</div>
         <div class="sub-row__meta">
@@ -1253,13 +1254,15 @@ function renderSubSection(title, subs, kind) {
         <div class="sub-row__monthly">≈ ${fmtMoney(sub.monthlyCost)}/mois</div>
       </div>
       <div class="sub-row__actions" onclick="event.stopPropagation()">
+        <button class="action-btn action-btn--primary" onclick="openSubscriptionDetailModal('${sub.key}')" title="${t("sub_view_transactions")}" aria-label="${t("sub_view_transactions")}">${icon("clipboard", 14)}</button>
         ${kind === "suggestion" ? `
-          <button class="action-btn action-btn--primary" onclick="confirmSubscription('${sub.key}','${esc(sub.name).replace(/'/g,"\\'")}','${sub.amount}','${sub.frequency}','${sub.accountId||""}','${sub.categoryId||""}')" title="${t("sub_confirm")}">${icon("check", 14)}</button>
+          <button class="action-btn" onclick="confirmSubscription('${sub.key}','${esc(sub.name).replace(/'/g,"\\'")}','${sub.amount}','${sub.frequency}','${sub.accountId||""}','${sub.categoryId||""}')" title="${t("sub_confirm")}">${icon("check", 14)}</button>
           <button class="action-btn" onclick="ignoreSubscription('${sub.key}','${esc(sub.name).replace(/'/g,"\\'")}')" title="${t("sub_ignore")}">${icon("x", 14)}</button>
         ` : `
           <button class="action-btn action-btn--danger" onclick="unconfirmSubscription('${sub._state?.id || ""}')" title="${t("sub_unconfirm")}">${icon("trash", 14)}</button>
         `}
       </div>
+      <span class="sub-row__chevron" aria-hidden="true">${icon("chevron-right", 16)}</span>
     </div>`;
   });
   h += `</div>`;
@@ -1331,18 +1334,19 @@ function openSubscriptionDetailModal(subKey) {
         ${txs.map(tx => {
           const acc = accounts.find(a => a.id === tx.accountId);
           const txCat = categories.find(c => c.id === tx.categoryId);
-          return `<div class="tx-item" style="border-bottom:1px solid var(--border)" onclick="closeModal();openTransactionModalThenReturnTo('${tx.id}','sub','${subKey}')" role="button" tabindex="0">
+          return `<div class="tx-item tx-item--editable" style="border-bottom:1px solid var(--border)" onclick="editTxFromModal('${tx.id}','sub','${subKey}')" role="button" tabindex="0" title="${t("edit")}">
             <div class="tx-item__body">
               <div class="tx-item__top">
                 <span class="tx-item__desc">${esc(tx.description || "—")}</span>
                 <span class="tx-item__amount" style="color:var(--status-red)">−${fmtMoney(tx.amount)}</span>
               </div>
               <div class="tx-item__bottom">
-                ${txCat ? `<span class="tx-pill" style="background:${txCat.color}15;color:${txCat.color};border-color:${txCat.color}40">${esc(tCategoryName(txCat))}</span>` : ""}
+                ${txCat ? `<span class="tx-pill" style="background:${txCat.color}15;color:${txCat.color};border-color:${txCat.color}40">${esc(tCategoryName(txCat))}</span>` : `<span class="tx-pill" style="background:var(--surface2);color:var(--text3)">— sans catégorie —</span>`}
                 <span class="tx-account-name">${fmtDateLong(tx.date)} · ${esc(acc?.name || "")}</span>
                 ${tx.notes ? `<span style="color:var(--text2);font-style:italic">📝 ${esc(tx.notes)}</span>` : ""}
               </div>
             </div>
+            <button class="action-btn action-btn--primary" onclick="event.stopPropagation();editTxFromModal('${tx.id}','sub','${subKey}')" title="${t("edit")}" aria-label="${t("edit")}">${icon("pencil", 14)}</button>
           </div>`;
         }).join("")}
       </div>
@@ -1385,12 +1389,20 @@ async function bulkRecategorizeSubscription(subKey) {
   });
 }
 
-// Wrapper pour ouvrir la modal de transaction et revenir après save
-// (pour le moment on ferme juste la modal de détail et on ouvre la modal de transaction normalement)
+// Ouvre la modal de transaction depuis une autre modal (détail abonnement, détail catégorie)
+// showModal() remplace le contenu de #modals, donc pas besoin de closeModal au préalable.
+function editTxFromModal(txId, returnPage, returnKey) {
+  try {
+    window._txEditReturn = { page: returnPage, key: returnKey };
+    openTransactionModal(txId);
+  } catch (e) {
+    console.error("editTxFromModal:", e);
+    alert("Erreur : impossible d'ouvrir la transaction. Regarde la console pour plus de détails.");
+  }
+}
+// Alias pour compat avec ancien nom
 function openTransactionModalThenReturnTo(txId, returnPage, returnKey) {
-  // On stocke le retour souhaité
-  window._txEditReturn = { page: returnPage, key: returnKey };
-  openTransactionModal(txId);
+  return editTxFromModal(txId, returnPage, returnKey);
 }
 
 async function confirmSubscription(key, name, amount, frequency, accountId, categoryId) {
