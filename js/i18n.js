@@ -190,6 +190,8 @@ const TRANSLATIONS = {
   period_month:          { fr: "Mois",                   es: "Mes" },
   period_year:           { fr: "Année",                  es: "Año" },
   sub_over_budget:       { fr: "à vérifier",             es: "por verificar" },
+  cat_add_quick:         { fr: "Créer une nouvelle catégorie", es: "Crear una nueva categoría" },
+  cat_add_quick_short:   { fr: "Nouvelle",                es: "Nueva" },
 
   // ── Catégorie détail (modal depuis top dépenses) ──
   cat_detail_title:      { fr: "Détail de la catégorie", es: "Detalle de la categoría" },

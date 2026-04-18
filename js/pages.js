@@ -36,9 +36,6 @@ function renderDashboard() {
   const savingsRate = monthly.income > 0 ? net / monthly.income : 0;
   const monthName = monthsArr[txFilterMonth].toLowerCase();
 
-  // Préparation des données pulse chart : revenus / dépenses jour par jour ce mois
-  const pulseSvg = renderSerenePulseChartSvg(monthly, txFilterYear, txFilterMonth);
-
   let h = `<div class="serene-page">
 
     <!-- Hero header : greeting + h1 éditorial + segment control -->
@@ -78,19 +75,15 @@ function renderDashboard() {
       </div>
     </div>
 
-    <!-- Grille principale : pulse chart + budgets du mois -->
+    <!-- Grille principale : doughnut catégories + budgets du mois -->
     <div class="dash-main-grid">
-      <!-- Carte pulse chart -->
+      <!-- Doughnut : répartition catégories -->
       <div class="serene-card">
-        <div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:24px">
-          <div class="serene-section-title" style="margin-bottom:0">${t("dash_pulse_title")}</div>
-          <div class="kicker kicker--small">${t("dash_pulse_legend")}</div>
+        <div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:16px">
+          <div class="serene-section-title" style="margin-bottom:0">${t("dash_top_categories")}</div>
+          <div class="kicker kicker--small">${monthsArr[txFilterMonth]} ${txFilterYear}</div>
         </div>
-        ${pulseSvg}
-        <div class="pulse-legend">
-          <span><span class="pulse-legend-dot" style="background:var(--accent)"></span>${t("dash_month_income")}</span>
-          <span><span class="pulse-legend-dot" style="background:var(--status-red)"></span>${t("dash_month_expenses")}</span>
-        </div>
+        <div style="position:relative;height:260px"><canvas id="chart-categories"></canvas></div>
       </div>
 
       <!-- Carte budgets du mois -->
@@ -98,6 +91,24 @@ function renderDashboard() {
         <div class="serene-section-title">${t("dash_budget_month")}</div>
         ${renderDashBudgetMini(budgetStatus)}
       </div>
+    </div>
+
+    <!-- Bar chart : revenus vs dépenses sur 6 mois -->
+    <div class="serene-card" style="margin-bottom:24px">
+      <div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:16px">
+        <div class="serene-section-title" style="margin-bottom:0">${t("dash_pulse_title")}</div>
+        <div class="kicker kicker--small">6 DERNIERS MOIS</div>
+      </div>
+      <div style="position:relative;height:240px"><canvas id="chart-income-expense"></canvas></div>
+    </div>
+
+    <!-- Line chart : évolution du solde sur 6 mois -->
+    <div class="serene-card" style="margin-bottom:24px">
+      <div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:16px">
+        <div class="serene-section-title" style="margin-bottom:0">Évolution du solde total</div>
+        <div class="kicker kicker--small">6 DERNIERS MOIS</div>
+      </div>
+      <div style="position:relative;height:240px"><canvas id="chart-balance-trend"></canvas></div>
     </div>
 
     <!-- Section dernières transactions -->
@@ -735,10 +746,15 @@ function renderTxFormContent(tx) {
       </label>
     ` : `
       <label>${t("tx_field_category")}
-        <select id="tx-category">
-          <option value="">— ${t("tx_field_category")} —</option>
-          ${filteredCats.map(c => `<option value="${c.id}" ${tx?.categoryId === c.id ? "selected" : ""}>${tCategoryName(c)}</option>`).join("")}
-        </select>
+        <div style="display:flex;gap:8px;align-items:stretch">
+          <select id="tx-category" style="flex:1">
+            <option value="">— ${t("tx_field_category")} —</option>
+            ${filteredCats.map(c => `<option value="${c.id}" ${tx?.categoryId === c.id ? "selected" : ""}>${tCategoryName(c)}</option>`).join("")}
+          </select>
+          <button type="button" class="action-btn" onclick="openQuickCategoryModal()" title="${t("cat_add_quick")}" style="flex-shrink:0;width:auto;padding:0 12px">
+            ${icon("plus", 14)} ${t("cat_add_quick_short")}
+          </button>
+        </div>
       </label>
     `}
     <label>${t("tx_field_desc")}<input id="tx-desc" value="${esc(tx?.description || "")}" placeholder="ex: Épicerie Loblaws"/></label>
@@ -921,9 +937,64 @@ async function saveCategory(id) {
     icon: document.getElementById("c-icon").value,
     color: document.getElementById("c-color").value
   };
-  if (id) await db.collection("categories").doc(id).update(data);
-  else { const nid = genId(); await db.collection("categories").doc(nid).set({ ...data, id: nid }); }
+  let newId = id;
+  if (id) {
+    await db.collection("categories").doc(id).update(data);
+  } else {
+    newId = genId();
+    await db.collection("categories").doc(newId).set({ ...data, id: newId });
+  }
   closeModal();
+
+  // Si on venait d'une transaction, on y retourne et on pré-sélectionne la nouvelle catégorie
+  if (window._txQuickCat) {
+    const savedTx = window._txQuickCat;
+    window._txQuickCat = null;
+    // Réouvre le modal avec l'état sauvegardé
+    setTimeout(() => {
+      if (savedTx.id) {
+        openTransactionModal(savedTx.id);
+      } else {
+        openTransactionModal();
+      }
+      // Restaure les valeurs
+      setTimeout(() => {
+        if (savedTx.amount) document.getElementById("tx-amount").value = savedTx.amount;
+        if (savedTx.date) document.getElementById("tx-date").value = savedTx.date;
+        if (savedTx.accountId) document.getElementById("tx-account").value = savedTx.accountId;
+        if (savedTx.toAccountId) document.getElementById("tx-to-account").value = savedTx.toAccountId;
+        if (savedTx.description) document.getElementById("tx-desc").value = savedTx.description;
+        if (savedTx.notes) document.getElementById("tx-notes").value = savedTx.notes;
+        // Auto-sélectionne la nouvelle catégorie si elle correspond au type de tx
+        const catSelect = document.getElementById("tx-category");
+        if (catSelect && newId) catSelect.value = newId;
+      }, 50);
+    }, 100);
+  }
+}
+
+// ── Modal de création rapide de catégorie depuis une tx ──────────
+function openQuickCategoryModal() {
+  // Sauvegarde l'état actuel du form tx
+  window._txQuickCat = {
+    id: document.querySelector("[onclick*=saveTransaction]")?.getAttribute("onclick")?.match(/saveTransaction\('([^']*)'\)/)?.[1] || "",
+    amount: document.getElementById("tx-amount")?.value,
+    date: document.getElementById("tx-date")?.value,
+    accountId: document.getElementById("tx-account")?.value,
+    toAccountId: document.getElementById("tx-to-account")?.value,
+    description: document.getElementById("tx-desc")?.value,
+    notes: document.getElementById("tx-notes")?.value,
+    type: txCurrentType
+  };
+  // Ouvre le modal de catégorie — le type sera présélectionné selon txCurrentType
+  openCategoryModal();
+  // Pré-sélectionne le bon type
+  setTimeout(() => {
+    const typeSelect = document.getElementById("c-type");
+    if (typeSelect) {
+      typeSelect.value = txCurrentType === "income" ? "income" : "expense";
+    }
+  }, 30);
 }
 
 // ═══════════════════════════════════════════════════════════════
@@ -940,11 +1011,17 @@ function initDashCharts() {
   if (typeof Chart === "undefined") return;
 
   const isDark = document.body.classList.contains("dark");
-  const textColor = isDark ? "#e8d5b8" : "#1a1a1a";
-  const gridColor = isDark ? "rgba(255,255,255,0.08)" : "rgba(0,0,0,0.06)";
+  // Palette Serene Minimal
+  const inkColor    = isDark ? "#f3efe7" : "#1a1915";
+  const mutedColor  = isDark ? "#8a877d" : "#6b6a64";
+  const sageColor   = isDark ? "#9fb074" : "#6b7a4a";
+  const warnColor   = isDark ? "#d47a5f" : "#a04a34";
+  const cardBg      = isDark ? "#1c1a15" : "#fbf8f2";
+  const gridColor   = isDark ? "rgba(243,239,231,0.06)" : "rgba(26,25,21,0.06)";
 
-  Chart.defaults.color = textColor;
+  Chart.defaults.color = mutedColor;
   Chart.defaults.font.family = "Inter, system-ui, sans-serif";
+  Chart.defaults.font.size = 11;
 
   // ── Doughnut : répartition des dépenses par catégorie (mois courant) ──
   const catCanvas = document.getElementById("chart-categories");
@@ -968,18 +1045,24 @@ function initDashCharts() {
           datasets: [{
             data: sorted.map(c => c.total),
             backgroundColor: sorted.map(c => c.color),
-            borderWidth: 2,
-            borderColor: isDark ? "#13100f" : "#ffffff"
+            borderWidth: 3,
+            borderColor: cardBg
           }]
         },
         options: {
-          responsive: true, maintainAspectRatio: false, cutout: "60%",
+          responsive: true, maintainAspectRatio: false, cutout: "65%",
           plugins: {
-            legend: { position: "right", labels: { boxWidth: 12, padding: 10, font: { size: 11 } } },
-            tooltip: {
-              callbacks: {
-                label: (ctx) => ` ${ctx.label}: ${fmtMoney(ctx.parsed)}`
+            legend: {
+              position: "right",
+              labels: {
+                boxWidth: 10, boxHeight: 10, padding: 12, font: { size: 11 },
+                usePointStyle: true, pointStyle: "circle"
               }
+            },
+            tooltip: {
+              backgroundColor: inkColor, titleColor: cardBg, bodyColor: cardBg,
+              padding: 10, cornerRadius: 6,
+              callbacks: { label: (ctx) => ` ${ctx.label}: ${fmtMoney(ctx.parsed)}` }
             }
           }
         }
@@ -1009,16 +1092,26 @@ function initDashCharts() {
       data: {
         labels: months.map(m => m.label),
         datasets: [
-          { label: "Revenus", data: months.map(m => m.income), backgroundColor: "#27ae60", borderRadius: 4 },
-          { label: "Dépenses", data: months.map(m => m.expense), backgroundColor: "#e74c3c", borderRadius: 4 }
+          { label: "Revenus", data: months.map(m => m.income), backgroundColor: sageColor, borderRadius: 3, barThickness: 18 },
+          { label: "Dépenses", data: months.map(m => m.expense), backgroundColor: warnColor, borderRadius: 3, barThickness: 18 }
         ]
       },
       options: {
         responsive: true, maintainAspectRatio: false,
-        plugins: { legend: { position: "bottom", labels: { boxWidth: 12, padding: 12, font: { size: 11 } } } },
+        plugins: {
+          legend: {
+            position: "bottom",
+            labels: { boxWidth: 10, boxHeight: 10, padding: 14, font: { size: 11 }, usePointStyle: true, pointStyle: "circle" }
+          },
+          tooltip: {
+            backgroundColor: inkColor, titleColor: cardBg, bodyColor: cardBg,
+            padding: 10, cornerRadius: 6,
+            callbacks: { label: (ctx) => ` ${ctx.dataset.label}: ${fmtMoney(ctx.parsed.y)}` }
+          }
+        },
         scales: {
-          x: { grid: { display: false }, ticks: { font: { size: 10 } } },
-          y: { grid: { color: gridColor }, ticks: { font: { size: 10 }, callback: (v) => v >= 1000 ? (v/1000).toFixed(0) + "k" : v } }
+          x: { grid: { display: false }, border: { display: false }, ticks: { font: { size: 10 } } },
+          y: { grid: { color: gridColor, drawBorder: false }, border: { display: false }, ticks: { font: { size: 10 }, callback: (v) => v >= 1000 ? (v/1000).toFixed(0) + "k" : v } }
         }
       }
     });
@@ -1059,24 +1152,30 @@ function initDashCharts() {
         datasets: [{
           label: "Solde total",
           data: months.map(m => m.balance),
-          borderColor: "#6b1a1f",
-          backgroundColor: "rgba(107, 26, 31, 0.1)",
+          borderColor: inkColor,
+          backgroundColor: isDark ? "rgba(159,176,116,0.12)" : "rgba(107,122,74,0.12)",
           fill: true,
-          tension: 0.3,
-          pointRadius: 4,
-          pointBackgroundColor: "#6b1a1f",
-          borderWidth: 2
+          tension: 0.35,
+          pointRadius: 3,
+          pointBackgroundColor: inkColor,
+          pointBorderColor: cardBg,
+          pointBorderWidth: 2,
+          borderWidth: 1.6
         }]
       },
       options: {
         responsive: true, maintainAspectRatio: false,
         plugins: {
           legend: { display: false },
-          tooltip: { callbacks: { label: (ctx) => " " + fmtMoney(ctx.parsed.y) } }
+          tooltip: {
+            backgroundColor: inkColor, titleColor: cardBg, bodyColor: cardBg,
+            padding: 10, cornerRadius: 6,
+            callbacks: { label: (ctx) => " " + fmtMoney(ctx.parsed.y) }
+          }
         },
         scales: {
-          x: { grid: { display: false }, ticks: { font: { size: 10 } } },
-          y: { grid: { color: gridColor }, ticks: { font: { size: 10 }, callback: (v) => v >= 1000 ? (v/1000).toFixed(0) + "k" : v } }
+          x: { grid: { display: false }, border: { display: false }, ticks: { font: { size: 10 } } },
+          y: { grid: { color: gridColor, drawBorder: false }, border: { display: false }, ticks: { font: { size: 10 }, callback: (v) => v >= 1000 ? (v/1000).toFixed(0) + "k" : v } }
         }
       }
     });
