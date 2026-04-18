@@ -183,11 +183,12 @@ function renderDashBudgetMini(bs) {
   ${bs.items.length > 6 ? `<div style="margin-top:12px;text-align:center"><button class="btn-link" onclick="navTo('budget')">${t("dash_view_all")} →</button></div>` : ""}`;
 }
 
-// ── Liste des transactions récentes (groupées par jour) ─────────
+// ── Liste des transactions récentes : utilise le même rendu que la page Transactions
 function renderSereneRecentTx(recent) {
   if (recent.length === 0) {
     return `<div style="padding:16px 0;color:var(--text3);font-size:14px;text-align:center">${t("dash_no_tx")}</div>`;
   }
+  // Groupe par date
   const byDate = {};
   recent.forEach(tx => {
     const d = tx.date || "0000-00-00";
@@ -195,28 +196,46 @@ function renderSereneRecentTx(recent) {
     byDate[d].push(tx);
   });
   const dates = Object.keys(byDate).sort((a, b) => b.localeCompare(a));
-  return dates.map(date => `
-    <div style="margin-bottom:18px">
-      <div style="font-family:var(--font-mono);font-size:11px;letter-spacing:0.14em;text-transform:uppercase;color:var(--text3);margin-bottom:8px">${fmtDateLong(date)}</div>
-      <ul style="list-style:none;margin:0;padding:0">
-        ${byDate[date].map(tx => {
-          const cat = categories.find(c => c.id === tx.categoryId);
-          const acc = accounts.find(a => a.id === tx.accountId);
-          const isIncome = tx.type === "income";
-          const sign = isIncome ? "+" : tx.type === "expense" ? "−" : "";
-          const color = isIncome ? "var(--accent)" : "var(--text)";
-          return `<li onclick="openTransactionModal('${tx.id}')" role="button" tabindex="0" style="display:grid;grid-template-columns:1fr 120px 140px;gap:12px;padding:12px 0;border-top:1px solid var(--border);align-items:center;cursor:pointer" onmouseover="this.style.background='var(--surface2)'" onmouseout="this.style.background='transparent'">
-            <div>
-              <div style="font-size:14.5px;color:var(--text);margin-bottom:2px">${esc(tx.description || tCategoryName(cat) || "—")}</div>
-              <div style="font-size:11.5px;color:var(--text3)">${cat ? esc(tCategoryName(cat)) : (isIncome ? t("tx_type_income") : "—")}</div>
-            </div>
-            <div style="font-family:var(--font-mono);font-size:11px;color:var(--text3)">${esc(acc?.name || "")}</div>
-            <div style="font-family:var(--font-heading);font-size:18px;text-align:right;color:${color};letter-spacing:-0.01em">${sign}${fmtMoney(tx.amount)}</div>
-          </li>`;
-        }).join("")}
-      </ul>
-    </div>
-  `).join("");
+
+  let h = `<div class="tx-list-v2">`;
+  dates.forEach(date => {
+    const dayTxs = byDate[date];
+    const dayTotal = dayTxs.reduce((s, tx) => {
+      if (tx.type === "income") return s + Number(tx.amount || 0);
+      if (tx.type === "expense") return s - Number(tx.amount || 0);
+      return s;
+    }, 0);
+    h += `<div class="tx-day-group">
+      <div class="tx-day-header">
+        <span class="tx-day-date">${fmtDateLong(date)}</span>
+        <span class="tx-day-total" style="color:${dayTotal >= 0 ? 'var(--accent)' : 'var(--status-red)'}">${dayTotal >= 0 ? "+" : ""}${fmtMoney(dayTotal)}</span>
+      </div>
+      <div class="tx-day-list">`;
+    dayTxs.forEach(tx => {
+      const cat = categories.find(c => c.id === tx.categoryId);
+      const acc = accounts.find(a => a.id === tx.accountId);
+      const toAcc = accounts.find(a => a.id === tx.toAccountId);
+      const sign = tx.type === "income" ? "+" : tx.type === "expense" ? "−" : "";
+      const color = tx.type === "income" ? "var(--accent)" : tx.type === "expense" ? "var(--text)" : "var(--text2)";
+      const catColor = cat?.color || "var(--text3)";
+      const typeLabel = tx.type === "transfer" ? t("tx_type_transfer") : "";
+      h += `<div class="tx-item" onclick="openTransactionModal('${tx.id}')" role="button" tabindex="0">
+        <div class="tx-item__body">
+          <div class="tx-item__top">
+            <span class="tx-item__desc">${esc(tx.description || tCategoryName(cat) || "—")}</span>
+            <span class="tx-item__amount" style="color:${color}">${sign}${fmtMoney(tx.amount)}</span>
+          </div>
+          <div class="tx-item__bottom">
+            ${cat ? `<span class="tx-pill" style="background:${catColor}15;color:${catColor};border-color:${catColor}40">${esc(tCategoryName(cat))}</span>` : typeLabel ? `<span class="tx-pill" style="background:var(--surface2);color:var(--text2)">${typeLabel}</span>` : ""}
+            <span class="tx-account-name">${esc(acc?.name || "")}${tx.type === "transfer" && toAcc ? ` → ${esc(toAcc.name)}` : ""}</span>
+          </div>
+        </div>
+      </div>`;
+    });
+    h += `</div></div>`;
+  });
+  h += `</div>`;
+  return h;
 }
 
 // ── Pulse chart SVG : aires + lignes pour revenus/dépenses du mois ─

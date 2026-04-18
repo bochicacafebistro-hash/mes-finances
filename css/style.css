@@ -18,10 +18,10 @@
   --text2:#44433e;           /* body */
   --text3:#6b6a64;           /* muted (labels mono) */
 
-  /* ── Accent sage olive ────────────────────────────── */
-  --accent:#6b7a4a;
-  --accent-hover:#556138;
-  --accent-soft:#8a9964;
+  /* ── Accent sage olive (un peu plus vif) ──────────── */
+  --accent:#7d9654;
+  --accent-hover:#637a3f;
+  --accent-soft:#9aae72;
   --accent-text:#f3efe7;
 
   /* ── Accents colorés conservés (compat ancien CSS) ─ */
@@ -43,9 +43,9 @@
   --status-yellow-bg:rgba(179,122,42,.08);
   --status-yellow-border:rgba(179,122,42,.24);
   --status-yellow-vivid:#b37a2a;
-  --status-green:#6b7a4a;    /* sage = status ok */
-  --status-green-bg:rgba(107,122,74,.08);
-  --status-green-border:rgba(107,122,74,.24);
+  --status-green:#7d9654;    /* sage = status ok */
+  --status-green-bg:rgba(125,150,84,.08);
+  --status-green-border:rgba(125,150,84,.24);
   --status-blue:#3d4a7a;
   --status-blue-bg:rgba(61,74,122,.08);
   --status-blue-border:rgba(61,74,122,.24);
@@ -2733,7 +2733,7 @@ h1, h2, h3, h4 {
   color: var(--text3);
   margin-top: 4px;
 }
-.budget-row__icon { background: rgba(107,122,74,0.1) !important; color: var(--accent) !important; }
+.budget-row__icon { background: rgba(125,150,84,0.12) !important; color: var(--accent) !important; }
 .budget-row__status {
   font-family: var(--font-heading);
   font-size: 22px;
@@ -2785,7 +2785,7 @@ h1, h2, h3, h4 {
 .sub-row__badge {
   width: 40px; height: 40px;
   border-radius: 100px;
-  background: rgba(107,122,74,0.1);
+  background: rgba(125,150,84,0.12);
   color: var(--accent);
   display: flex; align-items: center; justify-content: center;
 }
