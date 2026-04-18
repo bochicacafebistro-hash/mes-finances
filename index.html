@@ -1,0 +1,106 @@
+<!DOCTYPE html>
+<html lang="fr-CA">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover"/>
+  <title>Mes Finances</title>
+  <meta name="description" content="Application personnelle de gestion des finances."/>
+  <meta name="robots" content="noindex, nofollow"/>
+
+  <!-- PWA -->
+  <link rel="manifest" href="manifest.json"/>
+  <meta name="theme-color" content="#6b1a1f" media="(prefers-color-scheme: light)"/>
+  <meta name="theme-color" content="#13100f" media="(prefers-color-scheme: dark)"/>
+  <meta name="apple-mobile-web-app-capable" content="yes"/>
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent"/>
+  <meta name="apple-mobile-web-app-title" content="Mes Finances"/>
+  <meta name="mobile-web-app-capable" content="yes"/>
+
+  <!-- Icônes -->
+  <link rel="icon" type="image/png" sizes="32x32" href="images/favicon-32x32.png"/>
+  <link rel="icon" type="image/png" sizes="16x16" href="images/favicon-16x16.png"/>
+  <link rel="apple-touch-icon" sizes="180x180" href="images/apple-touch-icon.png"/>
+  <link rel="apple-touch-icon" sizes="192x192" href="images/icon-192.png"/>
+
+  <!-- Polices -->
+  <link rel="preconnect" href="https://fonts.googleapis.com"/>
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
+  <link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,500;0,9..144,700;0,9..144,800;1,9..144,300&family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet"/>
+
+  <!-- Styles -->
+  <link rel="stylesheet" href="css/style.css"/>
+
+  <!-- Firebase -->
+  <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore-compat.js"></script>
+</head>
+<body>
+
+<div id="login-screen"></div>
+
+<div id="app-shell" style="display:none">
+  <div class="app-wrap">
+
+    <!-- SIDEBAR -->
+    <aside class="sidebar" id="sidebar" aria-label="Navigation principale">
+      <div class="sidebar-logo">
+        <div class="logo-name">MES FINAN<span>CES</span></div>
+        <div class="logo-sub">Gestion perso</div>
+        <div class="logo-bar" aria-hidden="true">
+          <div></div>
+          <div></div>
+          <div></div>
+        </div>
+      </div>
+      <nav class="sidebar-nav" id="sidebar-nav" aria-label="Sections"></nav>
+      <div class="sidebar-bottom">
+        <button class="btn-icon-sm" onclick="toggleDark()" id="dark-btn"></button>
+        <button class="btn-icon-sm" onclick="toggleUILang()" id="lang-btn"></button>
+        <button class="btn-icon-sm" onclick="logout()" id="logout-btn" style="flex:1"></button>
+      </div>
+    </aside>
+
+    <!-- MAIN -->
+    <main class="main" id="main-area">
+      <header class="topbar">
+        <div style="display:flex;align-items:center;gap:12px">
+          <button class="btn-icon-sm" onclick="toggleSidebar()" aria-label="Menu" id="sidebar-toggle-btn" style="border:1px solid var(--border-strong);color:var(--text2)"></button>
+          <h1 class="topbar-title" id="topbar-title">Tableau de bord</h1>
+        </div>
+      </header>
+      <div id="page-content"></div>
+    </main>
+
+  </div>
+</div>
+
+<div id="modals"></div>
+
+<!-- Scripts (ordre critique !) -->
+<script src="js/config.js"></script>
+<script src="js/state.js"></script>
+<script src="js/icons.js"></script>
+<script src="js/i18n.js"></script>
+<script src="js/utils.js"></script>
+<script src="js/pages.js"></script>
+<script src="js/sidebar.js"></script>
+<script src="js/auth.js"></script>
+<script src="js/firebase-listeners.js"></script>
+
+<!-- Init + PWA Service Worker -->
+<script>
+  document.documentElement.lang = getUILang() === "es" ? "es" : "fr-CA";
+  initDark();
+  document.getElementById("sidebar-toggle-btn").innerHTML = icon("menu", 18);
+  document.getElementById("logout-btn").innerHTML = icon("log-out", 14) + ' <span>' + t("logout") + '</span>';
+  if (!restoreSession()) showLogin();
+
+  if ('serviceWorker' in navigator) {
+    window.addEventListener('load', () => {
+      navigator.serviceWorker.register('sw.js').catch(err => console.warn('PWA: SW échec', err));
+    });
+  }
+</script>
+
+</body>
+</html>
