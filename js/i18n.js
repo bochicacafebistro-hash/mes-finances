@@ -171,7 +171,25 @@ const TRANSLATIONS = {
   sub_bulk_confirm:      { fr: "Mettre à jour les {n} transaction{s} de ce groupe vers la catégorie « {cat} » ?", es: "¿Actualizar las {n} transacciones de este grupo a la categoría « {cat} »?" },
   sub_bulk_done:         { fr: "✅ {n} transaction{s} reclassée{s}", es: "✅ {n} transacciones reclasificadas" },
   sub_detail_title:      { fr: "Détail du marchand",   es: "Detalle del comerciante" },
-  tx_edit_note:          { fr: "💡 Clique une transaction pour modifier sa catégorie, description ou ajouter une note", es: "💡 Haz clic en una transacción para modificar su categoría, descripción o agregar una nota" },
+  tx_edit_note:          { fr: "Clique une transaction pour modifier sa catégorie, description ou ajouter une note", es: "Haz clic en una transacción para modificar su categoría, descripción o agregar una nota" },
+
+  // ── Dashboard Serene ─────────────────────────────
+  dash_greeting:         { fr: "Bonjour",                es: "Hola" },
+  dash_hero_balanced:    { fr: "Tu es <em>à l'équilibre</em> ce mois-ci.", es: "Estás <em>en equilibrio</em> este mes." },
+  dash_hero_ahead:       { fr: "Tu es <em>{n} au-dessus</em> cette période.", es: "Estás <em>{n} por encima</em> este período." },
+  dash_hero_short:       { fr: "Tu es <em>à {n} près</em> d'équilibrer le mois.", es: "Estás <em>a {n}</em> de equilibrar el mes." },
+  dash_savings:          { fr: "Épargne",                es: "Ahorro" },
+  dash_net:              { fr: "Épargne nette",          es: "Ahorro neto" },
+  dash_pulse_title:      { fr: "Flux sur 30 jours",      es: "Flujo de 30 días" },
+  dash_pulse_legend:     { fr: "Revenus — Dépenses",     es: "Ingresos — Gastos" },
+  dash_budget_month:     { fr: "Budgets du mois",        es: "Presupuestos del mes" },
+  dash_last_tx:          { fr: "Dernières transactions", es: "Últimas transacciones" },
+  dash_view_tx:          { fr: "Tout voir",              es: "Ver todo" },
+  period_day:            { fr: "Jour",                   es: "Día" },
+  period_week:           { fr: "Semaine",                es: "Semana" },
+  period_month:          { fr: "Mois",                   es: "Mes" },
+  period_year:           { fr: "Année",                  es: "Año" },
+  sub_over_budget:       { fr: "à vérifier",             es: "por verificar" },
 
   // ── Catégorie détail (modal depuis top dépenses) ──
   cat_detail_title:      { fr: "Détail de la catégorie", es: "Detalle de la categoría" },

@@ -7,11 +7,15 @@ function renderDashboard() {
   const startMonth = monthStart(txFilterYear, txFilterMonth);
   const endMonth = monthEnd(txFilterYear, txFilterMonth);
   const monthly = getPeriodTotals(startMonth, endMonth);
+  const monthsArr = uiLang === "es" ? MONTHS_ES : MONTHS_FR;
 
-  // 5 transactions récentes
-  const recent = [...transactions].sort((a, b) => (b.date || "").localeCompare(a.date || "")).slice(0, 5);
+  // Transactions récentes (6 dernières), groupées par jour
+  const recent = [...transactions]
+    .filter(tx => tx.date)
+    .sort((a, b) => (b.date || "").localeCompare(a.date || ""))
+    .slice(0, 8);
 
-  // Top dépenses par catégorie ce mois-ci
+  // Dépenses par catégorie ce mois
   const monthExpTx = transactions.filter(tx => tx.type === "expense" && tx.date && tx.date >= startMonth && tx.date <= endMonth);
   const byCat = {};
   monthExpTx.forEach(tx => {
@@ -20,114 +24,243 @@ function renderDashboard() {
     if (!byCat[key]) byCat[key] = { cat, total: 0 };
     byCat[key].total += Number(tx.amount || 0);
   });
-  const topCats = Object.values(byCat).sort((a, b) => b.total - a.total).slice(0, 5);
 
-  // Statut budget : compte les catégories en dépassement
+  // Statut budget
   const budgetStatus = computeDashBudgetStatus(byCat);
-  const monthsArr = uiLang === "es" ? MONTHS_ES : MONTHS_FR;
 
-  let h = `<div class="page">
-    <div class="dash-greeting">
-      <h2 class="dash-greeting__title">${icon("bar-chart", 22)} ${t("dash_title")}</h2>
-    </div>
+  // H1 éditorial : message dynamique selon l'équilibre du mois
+  const net = monthly.income - monthly.expense;
+  const heroH1 = computeHeroH1(net);
 
-    <!-- Stats principales -->
-    <div class="dash-stats-grid">
-      <div class="dash-stat-card" style="border-left-color:var(--accent)">
-        <div class="dash-stat__head">
-          <span style="color:var(--accent)">${icon("wallet", 16)}</span>
-          <span class="dash-stat__label">${t("dash_total_balance")}</span>
-        </div>
-        <div class="dash-stat__value" style="color:${totalBalance >= 0 ? 'var(--status-green)' : 'var(--status-red)'}">${fmtMoney(totalBalance)}</div>
-        <div class="dash-stat__delta" style="color:var(--text3)">${accounts.length} ${accounts.length > 1 ? "comptes" : "compte"}</div>
+  // Taux d'épargne (income > 0 ? net/income : 0)
+  const savingsRate = monthly.income > 0 ? net / monthly.income : 0;
+  const monthName = monthsArr[txFilterMonth].toLowerCase();
+
+  // Préparation des données pulse chart : revenus / dépenses jour par jour ce mois
+  const pulseSvg = renderSerenePulseChartSvg(monthly, txFilterYear, txFilterMonth);
+
+  let h = `<div class="serene-page">
+
+    <!-- Hero header : greeting + h1 éditorial + segment control -->
+    <div class="serene-hero-header">
+      <div>
+        <div class="kicker" style="margin-bottom:10px">${t("dash_greeting").toUpperCase()} — ${monthsArr[txFilterMonth].toUpperCase()} ${txFilterYear}</div>
+        <h1 class="serene-hero-h1">${heroH1}</h1>
       </div>
-      <div class="dash-stat-card" style="border-left-color:var(--status-green)">
-        <div class="dash-stat__head">
-          <span style="color:var(--status-green)">${icon("trending-up", 16)}</span>
-          <span class="dash-stat__label">${t("dash_month_income")}</span>
-        </div>
-        <div class="dash-stat__value" style="color:var(--status-green)">${fmtMoney(monthly.income)}</div>
-        <div class="dash-stat__delta" style="color:var(--text3)">${MONTHS_FR[txFilterMonth]} ${txFilterYear}</div>
-      </div>
-      <div class="dash-stat-card" style="border-left-color:var(--status-red)">
-        <div class="dash-stat__head">
-          <span style="color:var(--status-red)">${icon("trending-down", 16)}</span>
-          <span class="dash-stat__label">${t("dash_month_expenses")}</span>
-        </div>
-        <div class="dash-stat__value" style="color:var(--status-red)">${fmtMoney(monthly.expense)}</div>
-        <div class="dash-stat__delta" style="color:var(--text3)">${monthly.count} transactions</div>
-      </div>
-      <div class="dash-stat-card" style="border-left-color:${monthly.balance >= 0 ? 'var(--status-green)' : 'var(--status-red)'}">
-        <div class="dash-stat__head">
-          <span style="color:${monthly.balance >= 0 ? 'var(--status-green)' : 'var(--status-red)'}">${icon(monthly.balance >= 0 ? "trending-up" : "trending-down", 16)}</span>
-          <span class="dash-stat__label">${t("dash_month_balance")}</span>
-        </div>
-        <div class="dash-stat__value" style="color:${monthly.balance >= 0 ? 'var(--status-green)' : 'var(--status-red)'}">${monthly.balance >= 0 ? "+" : ""}${fmtMoney(monthly.balance)}</div>
-        <div class="dash-stat__delta" style="color:var(--text3)">${MONTHS_FR[txFilterMonth]} ${txFilterYear}</div>
+      <div class="segment-control">
+        <button class="segment-btn" onclick="changeMonth(-1)" aria-label="${t("prev_month")}">←</button>
+        <button class="segment-btn segment-btn--active">${monthsArr[txFilterMonth]} ${txFilterYear}</button>
+        <button class="segment-btn" onclick="changeMonth(1)" aria-label="${t("next_month")}">→</button>
       </div>
     </div>
 
-    <!-- Mes comptes -->
+    <!-- KPI grid 4 cols -->
+    <div class="kpi-grid">
+      <div class="kpi-card">
+        <div class="kpi-card__label">${t("dash_total_balance")}</div>
+        <div class="kpi-card__value ${totalBalance < 0 ? 'kpi-card__value--warn' : ''}">${fmtMoney(totalBalance)}</div>
+        <div class="kpi-card__hint">${accounts.length} ${accounts.length > 1 ? "comptes" : "compte"}</div>
+      </div>
+      <div class="kpi-card">
+        <div class="kpi-card__label">${t("dash_month_income")}</div>
+        <div class="kpi-card__value">${fmtMoney(monthly.income)}</div>
+        <div class="kpi-card__hint">${monthly.count > 0 ? monthly.count + " transactions" : "—"}</div>
+      </div>
+      <div class="kpi-card">
+        <div class="kpi-card__label">${t("dash_month_expenses")}</div>
+        <div class="kpi-card__value">${fmtMoney(monthly.expense)}</div>
+        <div class="kpi-card__hint">${monthExpTx.length} ${monthExpTx.length > 1 ? "lignes" : "ligne"}</div>
+      </div>
+      <div class="kpi-card">
+        <div class="kpi-card__label">${t("dash_savings")}</div>
+        <div class="kpi-card__value ${net >= 0 ? 'kpi-card__value--accent' : 'kpi-card__value--warn'}">${(savingsRate * 100).toFixed(0)}%</div>
+        <div class="kpi-card__hint">${net >= 0 ? "+" : ""}${fmtMoney(net)} ${t("dash_net").toLowerCase()}</div>
+      </div>
+    </div>
+
+    <!-- Grille principale : pulse chart + budgets du mois -->
+    <div class="dash-main-grid">
+      <!-- Carte pulse chart -->
+      <div class="serene-card">
+        <div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:24px">
+          <div class="serene-section-title" style="margin-bottom:0">${t("dash_pulse_title")}</div>
+          <div class="kicker kicker--small">${t("dash_pulse_legend")}</div>
+        </div>
+        ${pulseSvg}
+        <div class="pulse-legend">
+          <span><span class="pulse-legend-dot" style="background:var(--accent)"></span>${t("dash_month_income")}</span>
+          <span><span class="pulse-legend-dot" style="background:var(--status-red)"></span>${t("dash_month_expenses")}</span>
+        </div>
+      </div>
+
+      <!-- Carte budgets du mois -->
+      <div class="serene-card">
+        <div class="serene-section-title">${t("dash_budget_month")}</div>
+        ${renderDashBudgetMini(budgetStatus)}
+      </div>
+    </div>
+
+    <!-- Section dernières transactions -->
+    <div class="serene-card" style="margin-bottom:24px">
+      <div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:20px">
+        <div class="serene-section-title" style="margin-bottom:0">${t("dash_last_tx")}</div>
+        <button class="btn-link" onclick="navTo('transactions')">${t("dash_view_tx")} →</button>
+      </div>
+      ${renderSereneRecentTx(recent)}
+    </div>
+
+    <!-- Mes comptes (compact) -->
     ${accounts.length > 0 ? `
-      <div class="dash-card" style="margin-bottom:16px">
-        <div class="dash-card__head">
-          <h3 class="dash-card__title">${icon("wallet", 16)} ${t("dash_accounts_overview")}</h3>
-          <button class="btn-icon-only" onclick="navTo('accounts')" aria-label="${t("dash_view_all")}">${icon("arrow-right", 14)}</button>
+      <div class="serene-card">
+        <div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:20px">
+          <div class="serene-section-title" style="margin-bottom:0">${t("dash_accounts_overview")}</div>
+          <button class="btn-link" onclick="navTo('accounts')">${t("dash_view_all")} →</button>
         </div>
-        <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:10px">
+        <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:20px">
           ${accounts.map(a => {
             const bal = getAccountBalance(a);
-            return `<div class="account-mini" style="border-left:4px solid ${a.color || 'var(--accent)'}">
-              <div class="account-mini__name">${esc(a.name || "?")}</div>
-              <div class="account-mini__type">${tAccountType(a.type)}</div>
-              <div class="account-mini__balance" style="color:${bal >= 0 ? 'var(--text)' : 'var(--status-red)'}">${fmtMoney(bal)}</div>
+            return `<div onclick="navTo('accounts')" role="button" tabindex="0" style="cursor:pointer;padding:14px 0;border-top:1px solid var(--border)">
+              <div style="font-family:var(--font-mono);font-size:11px;letter-spacing:0.05em;color:var(--text3);text-transform:uppercase;margin-bottom:6px">${esc(tAccountType(a.type))}</div>
+              <div style="font-family:var(--font-heading);font-size:17px;letter-spacing:-0.01em;margin-bottom:6px">${esc(a.name || "?")}</div>
+              <div style="font-family:var(--font-heading);font-size:24px;letter-spacing:-0.02em;color:${bal >= 0 ? 'var(--text)' : 'var(--status-red)'}">${fmtMoney(bal)}</div>
             </div>`;
           }).join("")}
         </div>
       </div>
     ` : `
-      <div class="empty">
-        <div style="margin-bottom:12px;color:var(--text3);display:flex;justify-content:center">${icon("wallet", 48)}</div>
-        ${t("dash_no_accounts")}
-        <br/><br/>
-        <button class="btn btn-primary" onclick="navTo('accounts')">${icon("plus", 16)} ${t("acc_add")}</button>
+      <div class="serene-card" style="text-align:center">
+        <div style="margin-bottom:16px;color:var(--text3);display:flex;justify-content:center">${icon("wallet", 48)}</div>
+        <p style="margin-bottom:20px;color:var(--text2)">${t("dash_no_accounts")}</p>
+        <button class="btn-pill" onclick="navTo('accounts')">${icon("plus", 14)} ${t("acc_add")}</button>
       </div>
     `}
-
-    <!-- Sélecteur de mois pour le dashboard -->
-    <div class="dash-month-selector">
-      <button class="btn-icon-only" onclick="changeMonth(-1)" aria-label="${t("prev_month")}">${icon("chevron-left", 14)}</button>
-      <span class="dash-month-label">${monthsArr[txFilterMonth]} ${txFilterYear}</span>
-      <button class="btn-icon-only" onclick="changeMonth(1)" aria-label="${t("next_month")}">${icon("chevron-right", 14)}</button>
-    </div>
-
-    <!-- Section Budget -->
-    ${renderDashBudget(budgetStatus)}
-
-    <!-- Graphiques -->
-    <div class="dash-charts-grid">
-      <div class="dash-card">
-        <h3 class="dash-card__title">${icon("pie-chart", 16)} ${t("dash_top_categories")}</h3>
-        <div style="position:relative;height:260px;margin-top:12px"><canvas id="chart-categories"></canvas></div>
-      </div>
-      <div class="dash-card">
-        <h3 class="dash-card__title">${icon("bar-chart", 16)} Revenus vs Dépenses (6 derniers mois)</h3>
-        <div style="position:relative;height:260px;margin-top:12px"><canvas id="chart-income-expense"></canvas></div>
-      </div>
-    </div>
-
-    <div class="dash-card" style="margin-bottom:16px">
-      <h3 class="dash-card__title">${icon("trending-up", 16)} Évolution du solde total (6 derniers mois)</h3>
-      <div style="position:relative;height:240px;margin-top:12px"><canvas id="chart-balance-trend"></canvas></div>
-    </div>
-
-    <!-- Grille du bas -->
-    <div class="dash-grid">
-      ${renderDashRecentTx(recent)}
-      ${renderDashTopCategories(topCats)}
-    </div>
   </div>`;
   return h;
+}
+
+// ── H1 éditorial : "Tu es à l'équilibre", "à 62$ près", etc. ─────
+function computeHeroH1(net) {
+  const abs = Math.abs(net);
+  if (abs < 5) return t("dash_hero_balanced");
+  if (net > 0) return t("dash_hero_ahead", { n: fmtMoney(abs) });
+  return t("dash_hero_short", { n: fmtMoney(abs) });
+}
+
+// ── Mini liste de budgets (pour la carte du dashboard) ──────────
+function renderDashBudgetMini(bs) {
+  if (bs.items.length === 0) {
+    return `<div style="padding:16px 0;color:var(--text3);font-size:14px">
+      <p style="margin-bottom:14px">${t("budget_none")}</p>
+      <button class="btn-pill" onclick="navTo('budget')">${icon("plus", 14)} ${t("budget_set_limit")}</button>
+    </div>`;
+  }
+  return `<ul class="bud-list">
+    ${bs.items.slice(0, 6).map(item => {
+      const overClass = item.status.status === "over" ? "bud-list__amount--over" : "";
+      const fillColor = item.status.status === "over" ? "var(--status-red)" : "var(--accent)";
+      return `<li class="bud-list__item" onclick="openCategoryDetailModal('${item.cat.id}')" role="button" tabindex="0">
+        <div class="bud-list__head">
+          <div class="bud-list__name">${esc(tCategoryName(item.cat))}</div>
+          <span class="bud-list__amount ${overClass}">${fmtMoney(item.spent)} <span class="bud-list__amount-dim">/ ${fmtMoney(item.budget.monthlyLimit)}</span></span>
+        </div>
+        <div class="bud-progress">
+          <div class="bud-progress__fill" style="width:${Math.min(item.status.pct, 100)}%;background:${fillColor}"></div>
+        </div>
+      </li>`;
+    }).join("")}
+  </ul>
+  ${bs.items.length > 6 ? `<div style="margin-top:12px;text-align:center"><button class="btn-link" onclick="navTo('budget')">${t("dash_view_all")} →</button></div>` : ""}`;
+}
+
+// ── Liste des transactions récentes (groupées par jour) ─────────
+function renderSereneRecentTx(recent) {
+  if (recent.length === 0) {
+    return `<div style="padding:16px 0;color:var(--text3);font-size:14px;text-align:center">${t("dash_no_tx")}</div>`;
+  }
+  const byDate = {};
+  recent.forEach(tx => {
+    const d = tx.date || "0000-00-00";
+    if (!byDate[d]) byDate[d] = [];
+    byDate[d].push(tx);
+  });
+  const dates = Object.keys(byDate).sort((a, b) => b.localeCompare(a));
+  return dates.map(date => `
+    <div style="margin-bottom:18px">
+      <div style="font-family:var(--font-mono);font-size:11px;letter-spacing:0.14em;text-transform:uppercase;color:var(--text3);margin-bottom:8px">${fmtDateLong(date)}</div>
+      <ul style="list-style:none;margin:0;padding:0">
+        ${byDate[date].map(tx => {
+          const cat = categories.find(c => c.id === tx.categoryId);
+          const acc = accounts.find(a => a.id === tx.accountId);
+          const isIncome = tx.type === "income";
+          const sign = isIncome ? "+" : tx.type === "expense" ? "−" : "";
+          const color = isIncome ? "var(--accent)" : "var(--text)";
+          return `<li onclick="openTransactionModal('${tx.id}')" role="button" tabindex="0" style="display:grid;grid-template-columns:1fr 120px 140px;gap:12px;padding:12px 0;border-top:1px solid var(--border);align-items:center;cursor:pointer" onmouseover="this.style.background='var(--surface2)'" onmouseout="this.style.background='transparent'">
+            <div>
+              <div style="font-size:14.5px;color:var(--text);margin-bottom:2px">${esc(tx.description || tCategoryName(cat) || "—")}</div>
+              <div style="font-size:11.5px;color:var(--text3)">${cat ? esc(tCategoryName(cat)) : (isIncome ? t("tx_type_income") : "—")}</div>
+            </div>
+            <div style="font-family:var(--font-mono);font-size:11px;color:var(--text3)">${esc(acc?.name || "")}</div>
+            <div style="font-family:var(--font-heading);font-size:18px;text-align:right;color:${color};letter-spacing:-0.01em">${sign}${fmtMoney(tx.amount)}</div>
+          </li>`;
+        }).join("")}
+      </ul>
+    </div>
+  `).join("");
+}
+
+// ── Pulse chart SVG : aires + lignes pour revenus/dépenses du mois ─
+function renderSerenePulseChartSvg(monthlyTotals, year, month) {
+  // Calcule les totaux jour par jour pour le mois
+  const start = monthStart(year, month);
+  const end = monthEnd(year, month);
+  const startD = new Date(start + "T12:00:00");
+  const endD = new Date(end + "T12:00:00");
+  const days = Math.round((endD - startD) / (1000 * 60 * 60 * 24)) + 1;
+
+  const incByDay = new Array(days).fill(0);
+  const expByDay = new Array(days).fill(0);
+
+  transactions
+    .filter(tx => tx.date && tx.date >= start && tx.date <= end)
+    .forEach(tx => {
+      const dayIdx = Math.round((new Date(tx.date + "T12:00:00") - startD) / (1000 * 60 * 60 * 24));
+      if (dayIdx < 0 || dayIdx >= days) return;
+      const amt = Number(tx.amount || 0);
+      if (tx.type === "income") incByDay[dayIdx] += amt;
+      else if (tx.type === "expense") expByDay[dayIdx] += amt;
+    });
+
+  const w = 720, h = 200, pad = 12;
+  const max = Math.max(1, ...incByDay, ...expByDay);
+
+  const toLine = (pts) => pts.map((v, i) => {
+    const x = pad + (i / Math.max(1, days - 1)) * (w - pad * 2);
+    const y = h - pad - (v / max) * (h - pad * 2);
+    return `${i === 0 ? "M" : "L"}${x.toFixed(1)},${y.toFixed(1)}`;
+  }).join(" ");
+
+  const toArea = (pts) => {
+    const base = h - pad;
+    const line = toLine(pts);
+    return `${line} L${w - pad},${base} L${pad},${base} Z`;
+  };
+
+  return `<svg viewBox="0 0 ${w} ${h}" class="pulse-chart" preserveAspectRatio="xMidYMid meet">
+    <defs>
+      <linearGradient id="incgrad" x1="0" y1="0" x2="0" y2="1">
+        <stop offset="0" stop-color="var(--accent)" stop-opacity="0.18"/>
+        <stop offset="1" stop-color="var(--accent)" stop-opacity="0"/>
+      </linearGradient>
+      <linearGradient id="expgrad" x1="0" y1="0" x2="0" y2="1">
+        <stop offset="0" stop-color="var(--status-red)" stop-opacity="0.14"/>
+        <stop offset="1" stop-color="var(--status-red)" stop-opacity="0"/>
+      </linearGradient>
+    </defs>
+    <path d="${toArea(incByDay)}" fill="url(#incgrad)"/>
+    <path d="${toArea(expByDay)}" fill="url(#expgrad)"/>
+    <path d="${toLine(incByDay)}" fill="none" stroke="var(--accent)" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>
+    <path d="${toLine(expByDay)}" fill="none" stroke="var(--status-red)" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>
+  </svg>`;
 }
 
 // ── Section Budget sur le dashboard ──────────────────
@@ -268,27 +401,26 @@ function renderDashTopCategories(topCats) {
 // ═══════════════════════════════════════════════════════════════
 
 function renderAccounts() {
-  let h = `<div class="page">
-    <div class="toolbar">
+  let h = `<div class="serene-page">
+    <div class="serene-hero-header">
       <div>
-        <h2 style="font-size:18px">${t("acc_title")}</h2>
-        <p style="font-size:13px;color:var(--text3);margin-top:2px">${t("acc_subtitle")}</p>
+        <div class="kicker" style="margin-bottom:10px">${t("acc_subtitle").toUpperCase()}</div>
+        <h1 class="serene-hero-h1" style="margin:0">${t("acc_title")}</h1>
       </div>
-      <button class="btn btn-primary" onclick="openAccountModal()">${icon("plus", 16)} ${t("acc_add")}</button>
+      <button class="btn-pill" onclick="openAccountModal()">${icon("plus", 14)} ${t("acc_add")}</button>
     </div>`;
 
   if (accounts.length === 0) {
-    h += `<div class="empty">
-      <div style="margin-bottom:12px;color:var(--text3);display:flex;justify-content:center">${icon("wallet", 48)}</div>
-      ${t("acc_no_accounts")}
+    h += `<div class="serene-card" style="text-align:center">
+      <div style="margin-bottom:16px;color:var(--text3);display:flex;justify-content:center">${icon("wallet", 48)}</div>
+      <p style="color:var(--text2)">${t("acc_no_accounts")}</p>
     </div>`;
   } else {
     const total = accounts.reduce((s, a) => s + getAccountBalance(a), 0);
-    h += `<div class="stat-grid" style="grid-template-columns:repeat(auto-fill,minmax(180px,1fr));margin-bottom:16px">
-      <div class="stat-card">
-        <div class="stat-num" style="color:${total >= 0 ? 'var(--accent)' : 'var(--status-red)'}">${fmtMoney(total)}</div>
-        <div class="stat-label">${icon("wallet", 14)} ${t("dash_total_balance")}</div>
-      </div>
+    h += `<div class="serene-card serene-card--lg" style="margin-bottom:24px">
+      <div class="kicker kicker--small" style="margin-bottom:6px">${t("dash_total_balance")}</div>
+      <div class="display-num display-num--lg" style="color:${total >= 0 ? 'var(--text)' : 'var(--status-red)'}">${fmtMoney(total)}</div>
+      <div style="font-size:12px;color:var(--text3);margin-top:6px">${accounts.length} ${accounts.length > 1 ? "comptes" : "compte"}</div>
     </div>`;
 
     h += `<div class="card-grid">`;
@@ -391,34 +523,35 @@ function renderTransactions() {
   const totals = getPeriodTotals(startMonth, endMonth);
   const monthsArr = uiLang === "es" ? MONTHS_ES : MONTHS_FR;
 
-  let h = `<div class="page">
-    <div class="toolbar">
+  let h = `<div class="serene-page">
+    <div class="serene-hero-header">
       <div>
-        <h2 style="font-size:18px">${t("tx_title")}</h2>
+        <div class="kicker" style="margin-bottom:10px">${monthsArr[txFilterMonth].toUpperCase()} ${txFilterYear}</div>
+        <h1 class="serene-hero-h1" style="margin:0">${t("tx_title")}</h1>
       </div>
-      <button class="btn btn-primary" onclick="openTransactionModal()">${icon("plus", 16)} ${t("tx_add")}</button>
+      <button class="btn-pill" onclick="openTransactionModal()">${icon("plus", 14)} ${t("tx_add")}</button>
     </div>
 
-    <!-- Sélecteur de mois -->
-    <div style="display:flex;align-items:center;gap:8px;margin-bottom:14px;flex-wrap:wrap">
-      <button class="btn-icon-only" onclick="changeMonth(-1)" aria-label="${t("prev_month")}">${icon("chevron-left", 14)}</button>
-      <div style="font-family:var(--font-heading);font-size:18px;font-weight:700;flex:1;text-align:center;letter-spacing:-.3px">${monthsArr[txFilterMonth]} ${txFilterYear}</div>
-      <button class="btn-icon-only" onclick="changeMonth(1)" aria-label="${t("next_month")}">${icon("chevron-right", 14)}</button>
+    <!-- Sélecteur de mois (segment control) -->
+    <div class="segment-control" style="margin-bottom:24px">
+      <button class="segment-btn" onclick="changeMonth(-1)" aria-label="${t("prev_month")}">←</button>
+      <button class="segment-btn segment-btn--active">${monthsArr[txFilterMonth]} ${txFilterYear}</button>
+      <button class="segment-btn" onclick="changeMonth(1)" aria-label="${t("next_month")}">→</button>
     </div>
 
-    <!-- Stats du mois -->
-    <div class="stat-grid" style="grid-template-columns:repeat(auto-fill,minmax(160px,1fr));margin-bottom:16px">
-      <div class="stat-card" style="border-left:4px solid var(--status-green)">
-        <div class="stat-num" style="color:var(--status-green);font-size:20px">${fmtMoney(totals.income)}</div>
-        <div class="stat-label">${icon("trending-up", 14)} ${t("dash_month_income")}</div>
+    <!-- KPI mini-grid -->
+    <div class="kpi-grid" style="grid-template-columns:repeat(3,1fr);margin-bottom:24px">
+      <div class="kpi-card">
+        <div class="kpi-card__label">${t("dash_month_income")}</div>
+        <div class="kpi-card__value kpi-card__value--accent" style="font-size:clamp(28px,2.5vw,36px)">${fmtMoney(totals.income)}</div>
       </div>
-      <div class="stat-card" style="border-left:4px solid var(--status-red)">
-        <div class="stat-num" style="color:var(--status-red);font-size:20px">${fmtMoney(totals.expense)}</div>
-        <div class="stat-label">${icon("trending-down", 14)} ${t("dash_month_expenses")}</div>
+      <div class="kpi-card">
+        <div class="kpi-card__label">${t("dash_month_expenses")}</div>
+        <div class="kpi-card__value" style="font-size:clamp(28px,2.5vw,36px)">${fmtMoney(totals.expense)}</div>
       </div>
-      <div class="stat-card" style="border-left:4px solid ${totals.balance >= 0 ? 'var(--status-green)' : 'var(--status-red)'}">
-        <div class="stat-num" style="color:${totals.balance >= 0 ? 'var(--status-green)' : 'var(--status-red)'};font-size:20px">${totals.balance >= 0 ? "+" : ""}${fmtMoney(totals.balance)}</div>
-        <div class="stat-label">${icon("dollar-sign", 14)} ${t("dash_month_balance")}</div>
+      <div class="kpi-card">
+        <div class="kpi-card__label">${t("dash_month_balance")}</div>
+        <div class="kpi-card__value ${totals.balance >= 0 ? 'kpi-card__value--accent' : 'kpi-card__value--warn'}" style="font-size:clamp(28px,2.5vw,36px)">${totals.balance >= 0 ? "+" : ""}${fmtMoney(totals.balance)}</div>
       </div>
     </div>
 
@@ -668,13 +801,13 @@ function renderCategoriesPage() {
   const expCats = categories.filter(c => c.type === "expense");
   const incCats = categories.filter(c => c.type === "income");
 
-  let h = `<div class="page">
-    <div class="toolbar">
+  let h = `<div class="serene-page">
+    <div class="serene-hero-header">
       <div>
-        <h2 style="font-size:18px">${t("cat_title")}</h2>
-        <p style="font-size:13px;color:var(--text3);margin-top:2px">${t("cat_subtitle")}</p>
+        <div class="kicker" style="margin-bottom:10px">${t("cat_subtitle").toUpperCase()}</div>
+        <h1 class="serene-hero-h1" style="margin:0">${t("cat_title")}</h1>
       </div>
-      <button class="btn btn-primary" onclick="openCategoryModal()">${icon("plus", 16)} ${t("cat_add")}</button>
+      <button class="btn-pill" onclick="openCategoryModal()">${icon("plus", 14)} ${t("cat_add")}</button>
     </div>`;
 
   if (categories.length === 0) {
@@ -1035,32 +1168,32 @@ function renderBudgetPage() {
   const totalSpent = budgets.reduce((s, b) => s + (spendByCat[b.categoryId] || 0), 0);
   const overall = getBudgetStatus(totalSpent, totalLimit);
 
-  let h = `<div class="page">
-    <div class="toolbar">
+  let h = `<div class="serene-page">
+    <div class="serene-hero-header">
       <div>
-        <h2 style="font-size:18px">${t("budget_title")}</h2>
-        <p style="font-size:13px;color:var(--text3);margin-top:2px">${t("budget_subtitle")}</p>
+        <div class="kicker" style="margin-bottom:10px">${monthsArr[txFilterMonth].toUpperCase()} ${txFilterYear}</div>
+        <h1 class="serene-hero-h1" style="margin:0">${t("budget_title")}</h1>
+        <p style="margin:8px 0 0;color:var(--text2);font-size:15px;max-width:480px">${t("budget_subtitle")}</p>
       </div>
-    </div>
-
-    <div style="display:flex;align-items:center;gap:8px;margin-bottom:14px;flex-wrap:wrap">
-      <button class="btn-icon-only" onclick="changeMonth(-1)" aria-label="${t("prev_month")}">${icon("chevron-left", 14)}</button>
-      <div style="font-family:var(--font-heading);font-size:18px;font-weight:700;flex:1;text-align:center;letter-spacing:-.3px">${monthsArr[txFilterMonth]} ${txFilterYear}</div>
-      <button class="btn-icon-only" onclick="changeMonth(1)" aria-label="${t("next_month")}">${icon("chevron-right", 14)}</button>
+      <div class="segment-control">
+        <button class="segment-btn" onclick="changeMonth(-1)">←</button>
+        <button class="segment-btn segment-btn--active">${monthsArr[txFilterMonth]} ${txFilterYear}</button>
+        <button class="segment-btn" onclick="changeMonth(1)">→</button>
+      </div>
     </div>`;
 
   // Résumé global du budget
   if (budgets.length > 0) {
-    h += `<div class="card" style="padding:20px;margin-bottom:20px;background:var(--surface);border:1px solid var(--border);border-radius:12px">
-      <div style="display:flex;justify-content:space-between;align-items:baseline;gap:16px;flex-wrap:wrap;margin-bottom:12px">
+    h += `<div class="serene-card serene-card--lg" style="margin-bottom:24px">
+      <div style="display:flex;justify-content:space-between;align-items:end;gap:24px;flex-wrap:wrap;margin-bottom:18px">
         <div>
-          <div style="font-size:12px;color:var(--text3);text-transform:uppercase;letter-spacing:.5px">${t("budget_total_spent")}</div>
-          <div style="font-family:var(--font-heading);font-size:32px;font-weight:700;color:${overall.color}">${fmtMoney(totalSpent)}</div>
-          <div style="font-size:13px;color:var(--text3)">/ ${fmtMoney(totalLimit)} ${t("budget_total_limit").toLowerCase()}</div>
+          <div class="kicker kicker--small" style="margin-bottom:6px">${t("budget_total_spent")}</div>
+          <div class="display-num display-num--lg" style="color:${overall.color}">${fmtMoney(totalSpent)}</div>
+          <div style="font-size:12px;color:var(--text3);margin-top:6px">/ ${fmtMoney(totalLimit)} ${t("budget_total_limit").toLowerCase()}</div>
         </div>
         <div style="text-align:right">
-          <div style="font-size:12px;color:var(--text3);text-transform:uppercase;letter-spacing:.5px">${totalSpent <= totalLimit ? t("budget_remaining") : t("budget_exceeded")}</div>
-          <div style="font-family:var(--font-heading);font-size:24px;font-weight:700;color:${totalSpent <= totalLimit ? 'var(--status-green)' : 'var(--status-red)'}">${fmtMoney(Math.abs(totalLimit - totalSpent))}</div>
+          <div class="kicker kicker--small" style="margin-bottom:6px">${totalSpent <= totalLimit ? t("budget_remaining") : t("budget_exceeded")}</div>
+          <div class="display-num display-num--md" style="color:${totalSpent <= totalLimit ? 'var(--accent)' : 'var(--status-red)'}">${fmtMoney(Math.abs(totalLimit - totalSpent))}</div>
         </div>
       </div>
       <div class="budget-progress__bar"><div class="budget-progress__fill" style="width:${Math.min(overall.pct, 100)}%;background:${overall.color}"></div></div>
@@ -1161,8 +1294,6 @@ async function removeBudget(budgetId, catName) {
 
 function renderSubscriptionsPage() {
   const detected = detectRecurringTransactions();
-
-  // Sépare : confirmés, ignorés, suggestions
   const confirmed = [];
   const ignored = [];
   const suggestions = [];
@@ -1174,54 +1305,85 @@ function renderSubscriptionsPage() {
   });
 
   const totalMonthly = confirmed.reduce((s, sub) => s + sub.monthlyCost, 0);
+  const yearly = totalMonthly * 12;
 
-  let h = `<div class="page">
-    <div class="toolbar">
+  let h = `<div class="serene-page">
+    <!-- Hero -->
+    <div style="margin-bottom:32px">
+      <div class="kicker" style="margin-bottom:10px">§ FONCTION — ABONNEMENTS</div>
+      <h1 class="serene-hero-h1" style="margin-bottom:16px">Les paiements qui se glissent,<br/><em>repérés.</em></h1>
+      <p style="max-width:560px;font-size:16px;color:var(--text2);margin:0">${t("sub_subtitle")}</p>
+    </div>
+
+    <!-- Summary 3 colonnes -->
+    <div class="sub-summary">
       <div>
-        <h2 style="font-size:18px">${t("sub_title")}</h2>
-        <p style="font-size:13px;color:var(--text3);margin-top:2px">${t("sub_subtitle")}</p>
+        <div class="kicker kicker--small" style="margin-bottom:6px">${t("sub_estimated_total")}</div>
+        <div class="display-num" style="font-size:clamp(40px,5vw,72px)">${fmtMoney(totalMonthly)}</div>
+        <div style="font-size:12px;color:var(--text3);margin-top:6px">/ mois · ${fmtMoney(yearly)} / an</div>
+      </div>
+      <div>
+        <div class="kicker kicker--small" style="margin-bottom:6px">${t("sub_confirmed")}</div>
+        <div class="display-num display-num--md">${confirmed.length}</div>
+      </div>
+      <div>
+        <div class="kicker kicker--small" style="margin-bottom:6px">${t("sub_suggestions")}</div>
+        <div class="display-num display-num--md" style="color:var(--accent)">${suggestions.length}</div>
       </div>
     </div>`;
-
-  // Résumé
-  if (confirmed.length > 0) {
-    h += `<div class="card" style="padding:20px;margin-bottom:20px;background:linear-gradient(135deg, var(--surface), var(--surface2));border:1px solid var(--border);border-radius:12px">
-      <div style="display:flex;gap:24px;flex-wrap:wrap;align-items:baseline">
-        <div>
-          <div style="font-size:12px;color:var(--text3);text-transform:uppercase;letter-spacing:.5px">${t("sub_estimated_total")}</div>
-          <div style="font-family:var(--font-heading);font-size:32px;font-weight:700;color:var(--accent)">${fmtMoney(totalMonthly)}</div>
-          <div style="font-size:13px;color:var(--text3)">/mois · ${fmtMoney(totalMonthly * 12)} / an</div>
-        </div>
-        <div>
-          <div style="font-size:12px;color:var(--text3);text-transform:uppercase;letter-spacing:.5px">${t("sub_confirmed")}</div>
-          <div style="font-family:var(--font-heading);font-size:32px;font-weight:700">${confirmed.length}</div>
-        </div>
-      </div>
-    </div>`;
-  }
 
   if (detected.length === 0) {
-    h += `<div class="empty">
-      <div style="margin-bottom:12px;color:var(--text3);display:flex;justify-content:center">${icon("refresh", 48)}</div>
-      ${t("sub_none_detected")}
+    h += `<div class="serene-card" style="text-align:center">
+      <div style="margin-bottom:16px;color:var(--text3);display:flex;justify-content:center">${icon("refresh", 48)}</div>
+      <p style="color:var(--text2)">${t("sub_none_detected")}</p>
     </div>`;
   } else {
-    // Section confirmés
     if (confirmed.length > 0) {
-      h += renderSubSection(t("sub_confirmed"), confirmed, "confirmed");
+      h += renderSereneSubSection(t("sub_confirmed"), confirmed, "confirmed");
     }
-    // Section suggestions
     if (suggestions.length > 0) {
-      h += renderSubSection(t("sub_suggestions") + " · " + t("sub_auto_detected"), suggestions, "suggestion");
+      h += renderSereneSubSection(t("sub_suggestions"), suggestions, "suggestion");
     }
-    // Section ignorés
     if (ignored.length > 0) {
-      h += `<details style="margin-top:16px"><summary style="cursor:pointer;font-weight:600;color:var(--text3);padding:8px 0">${t("sub_ignored")} (${ignored.length})</summary>` +
-           renderSubSection("", ignored, "ignored") + `</details>`;
+      h += `<details style="margin-top:24px">
+        <summary style="cursor:pointer;font-family:var(--font-mono);font-size:11px;letter-spacing:0.14em;text-transform:uppercase;color:var(--text3);padding:12px 0">${t("sub_ignored")} (${ignored.length})</summary>` +
+        renderSereneSubSection("", ignored, "ignored") + `</details>`;
     }
   }
 
   return h + `</div>`;
+}
+
+// Section Serene : titre kicker + liste de rows en grille
+function renderSereneSubSection(title, subs, kind) {
+  let h = title ? `<div class="kicker" style="margin:32px 0 16px">${title.toUpperCase()}</div>` : "";
+  h += `<ul style="list-style:none;margin:0;padding:0;border-top:1px solid var(--border)">`;
+  subs.forEach(sub => {
+    const cat = categories.find(c => c.id === sub.categoryId);
+    const freqLabel = t("sub_" + sub.frequency) || sub.frequency;
+    h += `<li class="sub-row sub-row--clickable" onclick="openSubscriptionDetailModal('${sub.key}')" role="button" tabindex="0" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();openSubscriptionDetailModal('${sub.key}')}" title="${t("sub_view_transactions")}">
+      <div class="sub-row__badge">${icon("refresh", 16)}</div>
+      <div>
+        <div class="sub-row__name">${esc(sub.name)}</div>
+        <div class="sub-row__meta">${freqLabel} · ${t("sub_last_charge").toLowerCase()} ${fmtDateShort(sub.lastDate)} · ${sub.occurrences} ${t("sub_occurrences")}</div>
+      </div>
+      <div class="sub-row__cat-col">${cat ? esc(tCategoryName(cat)) : "—"}</div>
+      <div>
+        <div class="sub-row__amount-col">${fmtMoney(sub.amount)}</div>
+        <div class="sub-row__monthly-mini">≈ ${fmtMoney(sub.monthlyCost)}/mois</div>
+      </div>
+      <div class="sub-row__actions" onclick="event.stopPropagation()">
+        ${kind === "suggestion" ? `
+          <button class="action-btn action-btn--primary" onclick="confirmSubscription('${sub.key}','${esc(sub.name).replace(/'/g,"\\'")}','${sub.amount}','${sub.frequency}','${sub.accountId||""}','${sub.categoryId||""}')" title="${t("sub_confirm")}">${icon("check", 14)}</button>
+          <button class="action-btn" onclick="ignoreSubscription('${sub.key}','${esc(sub.name).replace(/'/g,"\\'")}')" title="${t("sub_ignore")}">${icon("x", 14)}</button>
+        ` : `
+          <button class="action-btn action-btn--danger" onclick="unconfirmSubscription('${sub._state?.id || ""}')" title="${t("sub_unconfirm")}">${icon("trash", 14)}</button>
+        `}
+      </div>
+    </li>`;
+  });
+  h += `</ul>`;
+  return h;
 }
 
 function renderSubSection(title, subs, kind) {

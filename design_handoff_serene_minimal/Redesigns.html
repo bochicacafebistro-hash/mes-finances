@@ -1,0 +1,220 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>Mes Finances — 4 directions</title>
+
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=Fraunces:opsz,wght@9..144,300;9..144,400;9..144,500;9..144,600;9..144,700&family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500;600&family=Space+Grotesk:wght@300;400;500;600;700&family=DM+Sans:opsz,wght@9..40,300;9..40,400;9..40,500;9..40,600;9..40,700&family=Libre+Caslon+Condensed&family=Crimson+Pro:ital,wght@0,300..700;1,300..700&display=swap" rel="stylesheet">
+
+<style>
+  :root {
+    --ink: #14130f;
+    --paper: #f7f5f0;
+    --muted: #6b6a64;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; background: #1a1916; color: var(--ink); font-family: "Inter", system-ui, sans-serif; }
+
+  /* shell */
+  .shell {
+    display: grid;
+    grid-template-columns: 230px 1fr;
+    min-height: 100vh;
+    background: #111;
+  }
+  .shell__nav {
+    background: #111;
+    color: #e8e6e0;
+    padding: 24px 20px;
+    position: sticky; top: 0; align-self: start;
+    height: 100vh;
+    overflow-y: auto;
+    border-right: 1px solid #2a2925;
+  }
+  .brand { font-family: "Instrument Serif", serif; font-size: 22px; letter-spacing: -0.01em; margin-bottom: 2px; }
+  .brand em { font-style: italic; color: #c9a36a; }
+  .brand-sub { font-size: 10px; letter-spacing: 0.18em; color: #8a857a; text-transform: uppercase; margin-bottom: 28px; }
+
+  .nav-section { font-size: 10px; letter-spacing: 0.22em; color: #6b6a64; text-transform: uppercase; margin: 24px 0 10px; }
+  .nav-item {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 9px 10px; border-radius: 7px; cursor: pointer;
+    color: #d0cec8; font-size: 13.5px;
+    transition: background .15s, color .15s;
+  }
+  .nav-item:hover { background: #1a1916; color: #fff; }
+  .nav-item.is-active { background: #23211c; color: #fff; }
+  .nav-item.is-active-dir { background: #23211c; color: #c9a36a; }
+  .nav-item .dot { width: 6px; height: 6px; border-radius: 100px; background: #3a3833; }
+  .nav-item.is-active-dir .dot { background: #c9a36a; }
+
+  .nav-divider { height: 1px; background: #2a2925; margin: 24px 0; }
+
+  .nav-dir {
+    display: block;
+    width: 100%;
+    text-align: left;
+    border: 0; background: transparent;
+    color: #d0cec8;
+    padding: 10px 10px;
+    border-radius: 7px;
+    cursor: pointer;
+    font: inherit;
+    font-size: 13px;
+    display: flex; align-items: center; gap: 10px;
+  }
+  .nav-dir:hover { background: #1a1916; color: #fff; }
+  .nav-dir.is-active { background: #23211c; color: #fff; }
+  .nav-dir .num { font-family: "JetBrains Mono", monospace; font-size: 10px; color: #6b6a64; width: 16px; }
+  .nav-dir.is-active .num { color: #c9a36a; }
+
+  .stage {
+    background: var(--paper);
+    min-height: 100vh;
+    overflow: hidden;
+  }
+
+  /* Tweaks panel */
+  .tweaks {
+    position: fixed; right: 20px; bottom: 20px;
+    width: 288px;
+    background: #111;
+    color: #e8e6e0;
+    border: 1px solid #2a2925;
+    border-radius: 14px;
+    padding: 16px;
+    font-family: "Inter", sans-serif;
+    font-size: 12.5px;
+    z-index: 1000;
+    box-shadow: 0 24px 48px rgba(0,0,0,0.35);
+    display: none;
+  }
+  .tweaks.is-open { display: block; }
+  .tweaks h4 { margin: 0 0 2px; font-family: "Instrument Serif", serif; font-weight: 400; font-size: 18px; }
+  .tweaks p { margin: 0 0 14px; color: #8a857a; font-size: 11px; }
+  .tweaks .row { display: flex; align-items: center; justify-content: space-between; padding: 8px 0; border-top: 1px solid #23211c; }
+  .tweaks .row:first-of-type { border-top: 0; }
+  .tweaks label { color: #a6a49d; font-size: 11px; letter-spacing: 0.05em; text-transform: uppercase; }
+  .tweaks select, .tweaks input[type=range] {
+    background: #1a1916; color: #e8e6e0; border: 1px solid #2a2925; border-radius: 6px;
+    padding: 4px 6px; font: inherit; font-size: 11px;
+  }
+  .tweaks .swatches { display: flex; gap: 6px; }
+  .tweaks .sw {
+    width: 22px; height: 22px; border-radius: 100px;
+    border: 1px solid rgba(255,255,255,0.15);
+    cursor: pointer; padding: 0;
+  }
+  .tweaks .sw.is-active { outline: 2px solid #fff; outline-offset: 2px; }
+
+  /* density modifier — shared tokens drive each direction */
+  .stage[data-density="compact"] { --pad: 24px; --gap: 16px; --card-p: 18px; --h1: clamp(34px, 4.2vw, 56px); --body: 14px; }
+  .stage[data-density="comfortable"] { --pad: 40px; --gap: 28px; --card-p: 28px; --h1: clamp(44px, 5.6vw, 80px); --body: 15.5px; }
+  .stage[data-density="spacious"] { --pad: 64px; --gap: 44px; --card-p: 40px; --h1: clamp(56px, 7.2vw, 110px); --body: 16.5px; }
+
+  @media (max-width: 880px) {
+    .shell { grid-template-columns: 1fr; }
+    .shell__nav { position: relative; height: auto; border-right: 0; border-bottom: 1px solid #2a2925; }
+    .tweaks { width: calc(100vw - 40px); }
+  }
+</style>
+</head>
+<body>
+
+<div class="shell">
+  <aside class="shell__nav">
+    <div class="brand">Mes Finan<em>ces</em></div>
+    <div class="brand-sub">Gestion perso · v2</div>
+
+    <div class="nav-section">Redesigns</div>
+    <button class="nav-dir is-active" data-dir="1"><span class="num">01</span> Serene Minimal</button>
+    <button class="nav-dir" data-dir="2"><span class="num">02</span> Editorial Bold</button>
+    <button class="nav-dir" data-dir="3"><span class="num">03</span> Organic Warm</button>
+    <button class="nav-dir" data-dir="4"><span class="num">04</span> Neo-Brutalist Calm</button>
+
+    <div class="nav-section">Vue</div>
+    <button class="nav-dir is-active" data-view="home"><span class="num">A</span> Landing</button>
+    <button class="nav-dir" data-view="feature"><span class="num">B</span> Feature</button>
+    <button class="nav-dir" data-view="dashboard"><span class="num">C</span> Dashboard</button>
+
+    <div class="nav-divider"></div>
+
+    <div class="nav-section">À propos</div>
+    <p style="font-size:12px; color:#8a857a; line-height:1.55; margin:0 0 14px;">
+      4 directions de redesign pour un gestionnaire de finances personnelles. Active <b style="color:#c9a36a">Tweaks</b> dans la barre pour ajuster couleurs, typographie et densité.
+    </p>
+
+    <div style="font-family:'JetBrains Mono',monospace; font-size:10px; color:#6b6a64; letter-spacing:0.1em;">
+      MES FINANCES<br/>REDESIGN · 2026
+    </div>
+  </aside>
+
+  <main class="stage" id="stage" data-density="comfortable">
+    <div id="root"></div>
+  </main>
+</div>
+
+<!-- Tweaks panel -->
+<div class="tweaks" id="tweaks">
+  <h4>Tweaks</h4>
+  <p>Personnalise couleurs, typo et densité.</p>
+
+  <div class="row">
+    <label>Palette</label>
+    <div class="swatches" id="sw-palette"></div>
+  </div>
+
+  <div class="row">
+    <label>Typographie</label>
+    <select id="sel-typo">
+      <option value="default">Par défaut</option>
+      <option value="serif">Éditorial (serif)</option>
+      <option value="grotesk">Grotesque (sans)</option>
+      <option value="mono">Monospace</option>
+    </select>
+  </div>
+
+  <div class="row">
+    <label>Densité</label>
+    <select id="sel-density">
+      <option value="compact">Compact</option>
+      <option value="comfortable" selected>Comfortable</option>
+      <option value="spacious">Spacious</option>
+    </select>
+  </div>
+</div>
+
+<!-- React + Babel -->
+<script src="https://unpkg.com/react@18.3.1/umd/react.development.js" integrity="sha384-hD6/rw4ppMLGNu3tX5cjIb+uRZ7UkRJ6BPkLpg4hAu/6onKUg4lLsHAs9EBPT82L" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js" integrity="sha384-u6aeetuaXnQ38mYT8rp6sbXaQe3NL9t+IBXmnYxwkUI2Hw4bsp2Wvmx4yRQF1uAm" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js" integrity="sha384-m08KidiNqLdpJqLq95G/LEi8Qvjl/xUYll3QILypMoQ65QorJ9Lvtp2RXYGBFj1y" crossorigin="anonymous"></script>
+
+<script type="text/babel" src="src/shared.jsx"></script>
+<script type="text/babel" src="src/dir1_serene.jsx"></script>
+<script type="text/babel" src="src/dir2_editorial.jsx"></script>
+<script type="text/babel" src="src/dir3_organic.jsx"></script>
+<script type="text/babel" src="src/dir4_brutalist.jsx"></script>
+<script type="text/babel" src="src/app.jsx"></script>
+
+<script>
+/* EDIT MODE: tweaks host protocol */
+const TWEAK_DEFAULTS = /*EDITMODE-BEGIN*/{
+  "density": "compact",
+  "typo": "default",
+  "paletteIndex": 0
+}/*EDITMODE-END*/;
+
+window.addEventListener('message', (e) => {
+  const d = e.data;
+  if (!d || typeof d !== 'object') return;
+  if (d.type === '__activate_edit_mode') document.getElementById('tweaks').classList.add('is-open');
+  if (d.type === '__deactivate_edit_mode') document.getElementById('tweaks').classList.remove('is-open');
+});
+window.parent.postMessage({type: '__edit_mode_available'}, '*');
+</script>
+
+</body>
+</html>
