@@ -1432,7 +1432,7 @@ function renderBudgetPage() {
     const status = getBudgetStatus(spent, limit);
     const hasbudget = !!budget;
 
-    h += `<div class="budget-row" style="border-left:4px solid ${cat.color || 'var(--text3)'}">
+    h += `<div class="budget-row budget-row--clickable" style="border-left:4px solid ${cat.color || 'var(--text3)'}" onclick="openCategoryDetailModal('${cat.id}')" role="button" tabindex="0" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();openCategoryDetailModal('${cat.id}')}" title="Voir les transactions">
       <div class="budget-row__head">
         <div class="budget-row__name-block">
           <div class="budget-row__icon" style="color:${cat.color};background:${cat.color}15">${icon(cat.icon || "folder", 16)}</div>
@@ -1443,15 +1443,16 @@ function renderBudgetPage() {
             </div>
           </div>
         </div>
-        <div class="budget-row__actions">
+        <div class="budget-row__actions" onclick="event.stopPropagation()">
           ${hasbudget ? `
             <span class="budget-row__status" style="color:${status.color}">${status.pct.toFixed(0)}%</span>
             <button class="action-btn" onclick="openBudgetModal('${cat.id}')" title="${t("budget_edit")}">${icon("pencil", 14)}</button>
             <button class="action-btn action-btn--danger" onclick="removeBudget('${budget.id}', '${esc(tCategoryName(cat))}')" title="${t("budget_remove")}">${icon("trash", 14)}</button>
           ` : `
-            <button class="btn btn-primary" style="padding:6px 12px;font-size:12px" onclick="openBudgetModal('${cat.id}')">${icon("plus", 12)} ${t("budget_set_limit")}</button>
+            <button class="btn-pill" style="padding:6px 14px;font-size:12px" onclick="openBudgetModal('${cat.id}')">${icon("plus", 12)} ${t("budget_set_limit")}</button>
           `}
         </div>
+        <span class="budget-row__chevron" aria-hidden="true">${icon("chevron-right", 16)}</span>
       </div>
       ${hasbudget ? `<div class="budget-progress__bar" style="margin-top:10px"><div class="budget-progress__fill" style="width:${Math.min(status.pct, 100)}%;background:${status.color}"></div></div>` : ""}
     </div>`;
