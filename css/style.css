@@ -2653,6 +2653,62 @@ h1, h2, h3, h4 {
 }
 
 /* ═══════════════════════════════════════════════════════════════
+   FILTRES TRANSACTIONS SERENE
+   ═══════════════════════════════════════════════════════════════ */
+
+.tx-filters {
+  display: flex;
+  gap: 10px;
+  margin-bottom: 14px;
+  flex-wrap: wrap;
+  align-items: center;
+}
+.tx-filter-select {
+  padding: 9px 14px;
+  border: 1px solid var(--border-strong);
+  border-radius: 100px;
+  background: var(--surface);
+  color: var(--text);
+  font-family: var(--font-body);
+  font-size: 13px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  appearance: none;
+  -webkit-appearance: none;
+  background-image: url("data:image/svg+xml;charset=utf-8,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%236b6a64' stroke-width='1.6'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 12px center;
+  padding-right: 32px;
+}
+.tx-filter-select:hover { border-color: var(--accent); }
+.tx-filter-select:focus { outline: none; border-color: var(--accent); }
+.tx-filter-select option { background: var(--surface); color: var(--text); }
+
+/* Search box style Serene */
+.tx-filters .search-box {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 0 14px;
+  border: 1px solid var(--border-strong);
+  border-radius: 100px;
+  background: var(--surface);
+  height: 38px;
+  transition: border-color 0.15s ease;
+}
+.tx-filters .search-box:focus-within { border-color: var(--accent); }
+.tx-filters .search-box input {
+  border: none;
+  background: transparent;
+  outline: none;
+  font-family: var(--font-body);
+  font-size: 13px;
+  color: var(--text);
+  width: 100%;
+}
+.tx-filters .search-box input::placeholder { color: var(--text3); }
+
+/* ═══════════════════════════════════════════════════════════════
    TRANSACTIONS SERENE — overrides du V2
    ═══════════════════════════════════════════════════════════════ */
 

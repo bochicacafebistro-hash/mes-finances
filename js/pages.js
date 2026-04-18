@@ -93,6 +93,9 @@ function renderDashboard() {
       </div>
     </div>
 
+    <!-- Section abonnements du mois -->
+    ${renderDashSubscriptions()}
+
     <!-- Bar chart : revenus vs dépenses sur 6 mois -->
     <div class="serene-card" style="margin-bottom:24px">
       <div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:16px">
@@ -183,6 +186,68 @@ function renderDashBudgetMini(bs) {
   ${bs.items.length > 6 ? `<div style="margin-top:12px;text-align:center"><button class="btn-link" onclick="navTo('budget')">${t("dash_view_all")} →</button></div>` : ""}`;
 }
 
+// ── Section abonnements du mois (dashboard) ─────────────────────
+function renderDashSubscriptions() {
+  const start = monthStart(txFilterYear, txFilterMonth);
+  const end = monthEnd(txFilterYear, txFilterMonth);
+  const monthsArr = uiLang === "es" ? MONTHS_ES : MONTHS_FR;
+
+  const detected = detectRecurringTransactions();
+  // Filtre par mois courant + exclut les "ignored"
+  const monthSubs = [];
+  detected.forEach(sub => {
+    const monthTxs = sub.transactionIds
+      .map(id => transactions.find(tx => tx.id === id))
+      .filter(tx => tx && tx.date >= start && tx.date <= end);
+    if (monthTxs.length === 0) return;
+    const state = getSubscriptionState(sub.key);
+    if (state?.status === "ignored") return;
+    const monthAmount = monthTxs.reduce((s, tx) => s + Number(tx.amount || 0), 0);
+    const lastDate = monthTxs.sort((a,b) => (b.date || "").localeCompare(a.date || ""))[0].date;
+    monthSubs.push({ ...sub, monthAmount, lastDate, isConfirmed: state?.status === "confirmed" });
+  });
+  monthSubs.sort((a, b) => b.monthAmount - a.monthAmount);
+
+  const total = monthSubs.reduce((s, sub) => s + sub.monthAmount, 0);
+
+  if (monthSubs.length === 0) {
+    return `<div class="serene-card" style="margin-bottom:24px">
+      <div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:16px">
+        <div class="serene-section-title" style="margin-bottom:0">${t("nav_subscriptions")}</div>
+        <button class="btn-link" onclick="navTo('subscriptions')">${t("dash_view_all")} →</button>
+      </div>
+      <div style="padding:8px 0;color:var(--text3);font-size:14px;text-align:center">${t("sub_not_this_month")}</div>
+    </div>`;
+  }
+
+  return `<div class="serene-card" style="margin-bottom:24px">
+    <div style="display:flex;justify-content:space-between;align-items:end;flex-wrap:wrap;gap:12px;margin-bottom:18px">
+      <div>
+        <div class="kicker kicker--small" style="margin-bottom:6px">${t("sub_month_total")} · ${monthsArr[txFilterMonth]} ${txFilterYear}</div>
+        <div class="display-num display-num--md" style="color:var(--accent)">${fmtMoney(total)}</div>
+        <div style="font-size:12px;color:var(--text3);margin-top:6px">${monthSubs.length} prélèvement${monthSubs.length > 1 ? "s" : ""}</div>
+      </div>
+      <button class="btn-link" onclick="navTo('subscriptions')">${t("dash_view_all")} →</button>
+    </div>
+    <ul style="list-style:none;margin:0;padding:0;border-top:1px solid var(--border)">
+      ${monthSubs.slice(0, 8).map(sub => {
+        const cat = categories.find(c => c.id === sub.categoryId);
+        const catColor = cat?.color || "var(--accent)";
+        const freqLabel = t("sub_" + sub.frequency) || sub.frequency;
+        return `<li onclick="openSubscriptionDetailModal('${sub.key}')" role="button" tabindex="0" style="display:grid;grid-template-columns:auto 1fr auto;gap:14px;padding:12px 0;border-bottom:1px solid var(--border);align-items:center;cursor:pointer" onmouseover="this.style.background='var(--surface2)'" onmouseout="this.style.background='transparent'">
+          <div style="width:32px;height:32px;border-radius:100px;background:${catColor}20;color:${catColor};display:flex;align-items:center;justify-content:center;flex-shrink:0">${icon("refresh", 14)}</div>
+          <div style="min-width:0">
+            <div style="font-family:var(--font-heading);font-size:16px;letter-spacing:-0.01em;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(sub.name)}${sub.isConfirmed ? ' <span style="color:var(--accent);font-family:var(--font-mono);font-size:10px;letter-spacing:0.1em">✓</span>' : ""}</div>
+            <div style="font-size:11.5px;color:var(--text3);font-family:var(--font-body)">${cat ? esc(tCategoryName(cat)) : freqLabel} · ${fmtDateShort(sub.lastDate)}</div>
+          </div>
+          <div style="font-family:var(--font-heading);font-size:18px;text-align:right;letter-spacing:-0.01em;flex-shrink:0">${fmtMoney(sub.monthAmount)}</div>
+        </li>`;
+      }).join("")}
+    </ul>
+    ${monthSubs.length > 8 ? `<div style="margin-top:12px;text-align:center"><button class="btn-link" onclick="navTo('subscriptions')">+ ${monthSubs.length - 8} autres →</button></div>` : ""}
+  </div>`;
+}
+
 // ── Liste des transactions récentes : utilise le même rendu que la page Transactions
 function renderSereneRecentTx(recent) {
   if (recent.length === 0) {
@@ -227,7 +292,7 @@ function renderSereneRecentTx(recent) {
           </div>
           <div class="tx-item__bottom">
             ${cat ? `<span class="tx-pill" style="background:${catColor}15;color:${catColor};border-color:${catColor}40">${esc(tCategoryName(cat))}</span>` : typeLabel ? `<span class="tx-pill" style="background:var(--surface2);color:var(--text2)">${typeLabel}</span>` : ""}
-            <span class="tx-account-name">${esc(acc?.name || "")}${tx.type === "transfer" && toAcc ? ` → ${esc(toAcc.name)}` : ""}</span>
+            <span class="tx-account-name">${tx.type === "transfer" ? `${acc ? esc(acc.name) : "Externe"}${toAcc ? ` → ${esc(toAcc.name)}` : ""}` : esc(acc?.name || "")}</span>
           </div>
         </div>
       </div>`;
@@ -585,27 +650,49 @@ function renderTransactions() {
       </div>
     </div>
 
-    <!-- Filtres -->
-    <div style="display:flex;gap:8px;margin-bottom:14px;flex-wrap:wrap;align-items:center">
-      <div class="search-box" style="flex:1;min-width:160px">
+    <!-- Bannière si paiements de carte mal classés -->
+    ${(() => {
+      const misclass = detectMisclassifiedCardPayments();
+      if (misclass.length === 0) return "";
+      return `<div class="serene-card" style="margin-bottom:20px;border-left:4px solid var(--status-red);padding:16px 20px">
+        <div style="display:flex;gap:16px;align-items:center;flex-wrap:wrap">
+          <div style="flex:1;min-width:220px">
+            <div class="kicker kicker--small" style="color:var(--status-red);margin-bottom:4px">ATTENTION</div>
+            <div style="font-family:var(--font-heading);font-size:18px;letter-spacing:-0.01em;margin-bottom:4px">${t("fix_card_pmt_title", { n: misclass.length, s: misclass.length > 1 ? "s" : "" })}</div>
+            <div style="font-size:13px;color:var(--text2)">${t("fix_card_pmt_desc")}</div>
+          </div>
+          <button class="btn-pill" onclick="runFixCardPayments()">${icon("refresh", 14)} ${t("fix_card_pmt_action", { n: misclass.length })}</button>
+        </div>
+      </div>`;
+    })()}
+
+    <!-- Filtres Serene -->
+    <div class="tx-filters">
+      <div class="search-box" style="flex:1;min-width:180px">
         <span style="color:var(--text3);display:flex">${icon("search", 16)}</span>
         <input type="text" placeholder="${t("search")}" value="${esc(txSearchQuery)}" oninput="setTxSearch(this.value)"/>
       </div>
-      <select onchange="setTxFilterType(this.value)" style="padding:6px 10px;border:1px solid var(--border);border-radius:8px;background:var(--surface);color:var(--text);font-size:13px;width:auto">
-        <option value="all" ${txFilterType==="all"?"selected":""}>${t("tx_filter_type")}</option>
+      <select class="tx-filter-select" onchange="setTxFilterType(this.value)">
+        <option value="all" ${txFilterType==="all"?"selected":""}>— ${t("tx_filter_type")} —</option>
         <option value="expense" ${txFilterType==="expense"?"selected":""}>${t("tx_type_expense")}</option>
         <option value="income" ${txFilterType==="income"?"selected":""}>${t("tx_type_income")}</option>
         <option value="transfer" ${txFilterType==="transfer"?"selected":""}>${t("tx_type_transfer")}</option>
       </select>
-      <select onchange="setTxFilterAccount(this.value)" style="padding:6px 10px;border:1px solid var(--border);border-radius:8px;background:var(--surface);color:var(--text);font-size:13px;width:auto">
-        <option value="all">${t("tx_filter_account")}</option>
+      <select class="tx-filter-select" onchange="setTxFilterAccount(this.value)">
+        <option value="all" ${txFilterAccount==="all"?"selected":""}>— ${t("tx_filter_account")} —</option>
         ${accounts.map(a => `<option value="${a.id}" ${txFilterAccount===a.id?"selected":""}>${esc(a.name)}</option>`).join("")}
       </select>
-      <select onchange="setTxFilterCategory(this.value)" style="padding:6px 10px;border:1px solid var(--border);border-radius:8px;background:var(--surface);color:var(--text);font-size:13px;width:auto">
-        <option value="all">${t("tx_filter_category")}</option>
+      <select class="tx-filter-select" onchange="setTxFilterCategory(this.value)">
+        <option value="all" ${txFilterCategory==="all"?"selected":""}>— ${t("tx_filter_category")} —</option>
         ${categories.map(c => `<option value="${c.id}" ${txFilterCategory===c.id?"selected":""}>${tCategoryName(c)}</option>`).join("")}
       </select>
-    </div>`;
+      ${(txFilterType !== "all" || txFilterAccount !== "all" || txFilterCategory !== "all" || txSearchQuery) ? `
+        <button class="action-btn" onclick="resetTxFilters()" title="${t("tx_filter_reset")}" style="flex-shrink:0">${icon("x", 14)}</button>
+      ` : ""}
+    </div>
+
+    <!-- Compteur résultats -->
+    <div style="font-family:var(--font-mono);font-size:11px;letter-spacing:0.14em;text-transform:uppercase;color:var(--text3);margin-bottom:14px">${t("tx_filter_results", { n: filtered.length, s: filtered.length > 1 ? "s" : "" })}</div>`;
 
   if (filtered.length === 0) {
     h += `<div class="empty">
@@ -652,7 +739,7 @@ function renderTransactions() {
             </div>
             <div class="tx-item__bottom">
               ${cat ? `<span class="tx-pill" style="background:${catColor}15;color:${catColor};border-color:${catColor}40">${esc(tCategoryName(cat))}</span>` : typeLabel ? `<span class="tx-pill" style="background:var(--surface2);color:var(--text2)">${typeLabel}</span>` : ""}
-              <span class="tx-account-name">${esc(acc?.name || "")}${tx.type === "transfer" && toAcc ? ` → ${esc(toAcc.name)}` : ""}</span>
+              <span class="tx-account-name">${tx.type === "transfer" ? `${acc ? esc(acc.name) : "Externe"}${toAcc ? ` → ${esc(toAcc.name)}` : ""}` : esc(acc?.name || "")}</span>
             </div>
           </div>
           <div class="menu-wrap" onclick="event.stopPropagation()">
@@ -685,6 +772,24 @@ function setTxSearch(v) { txSearchQuery = v; renderPage(); }
 function setTxFilterType(v) { txFilterType = v; renderPage(); }
 function setTxFilterAccount(v) { txFilterAccount = v; renderPage(); }
 function setTxFilterCategory(v) { txFilterCategory = v; renderPage(); }
+
+function resetTxFilters() {
+  txFilterType = "all";
+  txFilterAccount = "all";
+  txFilterCategory = "all";
+  txSearchQuery = "";
+  renderPage();
+}
+
+async function runFixCardPayments() {
+  const misclass = detectMisclassifiedCardPayments();
+  if (misclass.length === 0) return;
+  const msg = `${t("fix_card_pmt_desc")}\n\nConvertir ${misclass.length} transaction${misclass.length > 1 ? "s" : ""} en transferts ?`;
+  openConfirm(t("fix_card_pmt_title", { n: misclass.length, s: misclass.length > 1 ? "s" : "" }), msg, async () => {
+    const n = await fixCardPaymentsBulk();
+    alert(t("fix_card_pmt_done", { n, s: n > 1 ? "s" : "" }));
+  });
+}
 
 // Modal Transaction
 let txCurrentType = "expense";
@@ -1411,49 +1516,80 @@ async function removeBudget(budgetId, catName) {
 // ═══════════════════════════════════════════════════════════════
 
 function renderSubscriptionsPage() {
+  const monthsArr = uiLang === "es" ? MONTHS_ES : MONTHS_FR;
+  const start = monthStart(txFilterYear, txFilterMonth);
+  const end = monthEnd(txFilterYear, txFilterMonth);
+
   const detected = detectRecurringTransactions();
+
+  // Pour chaque abonnement détecté : trouve les transactions qui tombent dans le mois courant
+  const withMonthData = detected.map(sub => {
+    const monthTxs = sub.transactionIds
+      .map(id => transactions.find(tx => tx.id === id))
+      .filter(tx => tx && tx.date >= start && tx.date <= end);
+    const monthAmount = monthTxs.reduce((s, tx) => s + Number(tx.amount || 0), 0);
+    return {
+      ...sub,
+      monthTxs,
+      monthAmount,
+      hasMonthCharge: monthTxs.length > 0
+    };
+  });
+
+  // Sépare : confirmés, ignorés, suggestions — en ne gardant que ceux ayant un prélèvement ce mois-ci
   const confirmed = [];
   const ignored = [];
   const suggestions = [];
-  detected.forEach(sub => {
+  withMonthData.forEach(sub => {
+    if (!sub.hasMonthCharge) return; // Hide subs that have no charge this month
     const state = getSubscriptionState(sub.key);
     if (state?.status === "confirmed") confirmed.push({ ...sub, _state: state });
     else if (state?.status === "ignored") ignored.push({ ...sub, _state: state });
     else suggestions.push(sub);
   });
 
-  const totalMonthly = confirmed.reduce((s, sub) => s + sub.monthlyCost, 0);
-  const yearly = totalMonthly * 12;
+  // Total = somme réelle des montants prélevés ce mois-ci (confirmés + suggestions)
+  const monthTotal = [...confirmed, ...suggestions].reduce((s, sub) => s + sub.monthAmount, 0);
+  const confirmedTotal = confirmed.reduce((s, sub) => s + sub.monthAmount, 0);
 
   let h = `<div class="serene-page">
     <!-- Hero -->
-    <div style="margin-bottom:32px">
-      <div class="kicker" style="margin-bottom:10px">§ FONCTION — ABONNEMENTS</div>
-      <h1 class="serene-hero-h1" style="margin-bottom:16px">Les paiements qui se glissent,<br/><em>repérés.</em></h1>
-      <p style="max-width:560px;font-size:16px;color:var(--text2);margin:0">${t("sub_subtitle")}</p>
+    <div class="serene-hero-header">
+      <div>
+        <div class="kicker" style="margin-bottom:10px">${monthsArr[txFilterMonth].toUpperCase()} ${txFilterYear}</div>
+        <h1 class="serene-hero-h1" style="margin:0">${t("sub_title")}</h1>
+        <p style="max-width:560px;font-size:15px;color:var(--text2);margin:8px 0 0">${t("sub_subtitle")}</p>
+      </div>
+      <div class="segment-control">
+        <button class="segment-btn" onclick="changeMonth(-1)">←</button>
+        <button class="segment-btn segment-btn--active">${monthsArr[txFilterMonth]} ${txFilterYear}</button>
+        <button class="segment-btn" onclick="changeMonth(1)">→</button>
+      </div>
     </div>
 
-    <!-- Summary 3 colonnes -->
+    <!-- Summary 3 colonnes : total DU MOIS -->
     <div class="sub-summary">
       <div>
-        <div class="kicker kicker--small" style="margin-bottom:6px">${t("sub_estimated_total")}</div>
-        <div class="display-num" style="font-size:clamp(40px,5vw,72px)">${fmtMoney(totalMonthly)}</div>
-        <div style="font-size:12px;color:var(--text3);margin-top:6px">/ mois · ${fmtMoney(yearly)} / an</div>
+        <div class="kicker kicker--small" style="margin-bottom:6px">${t("sub_month_total")}</div>
+        <div class="display-num" style="font-size:clamp(40px,5vw,72px)">${fmtMoney(monthTotal)}</div>
+        <div style="font-size:12px;color:var(--text3);margin-top:6px">${monthsArr[txFilterMonth]} ${txFilterYear} · ${confirmed.length + suggestions.length} prélèvement${(confirmed.length + suggestions.length) > 1 ? "s" : ""}</div>
       </div>
       <div>
         <div class="kicker kicker--small" style="margin-bottom:6px">${t("sub_confirmed")}</div>
         <div class="display-num display-num--md">${confirmed.length}</div>
+        <div style="font-size:12px;color:var(--text3);margin-top:4px">${fmtMoney(confirmedTotal)}</div>
       </div>
       <div>
         <div class="kicker kicker--small" style="margin-bottom:6px">${t("sub_suggestions")}</div>
         <div class="display-num display-num--md" style="color:var(--accent)">${suggestions.length}</div>
+        <div style="font-size:12px;color:var(--text3);margin-top:4px">${fmtMoney(monthTotal - confirmedTotal)}</div>
       </div>
     </div>`;
 
-  if (detected.length === 0) {
+  if (confirmed.length === 0 && suggestions.length === 0) {
     h += `<div class="serene-card" style="text-align:center">
       <div style="margin-bottom:16px;color:var(--text3);display:flex;justify-content:center">${icon("refresh", 48)}</div>
-      <p style="color:var(--text2)">${t("sub_none_detected")}</p>
+      <p style="color:var(--text2)">${detected.length === 0 ? t("sub_none_detected") : t("sub_not_this_month")}</p>
     </div>`;
   } else {
     if (confirmed.length > 0) {
@@ -1479,16 +1615,22 @@ function renderSereneSubSection(title, subs, kind) {
   subs.forEach(sub => {
     const cat = categories.find(c => c.id === sub.categoryId);
     const freqLabel = t("sub_" + sub.frequency) || sub.frequency;
+    // Date du prélèvement de ce mois (le plus récent si plusieurs)
+    const monthChargeDate = sub.monthTxs && sub.monthTxs.length > 0
+      ? sub.monthTxs.sort((a,b) => (b.date || "").localeCompare(a.date || ""))[0].date
+      : sub.lastDate;
+    const chargeCount = sub.monthTxs ? sub.monthTxs.length : 1;
+    const displayAmount = sub.monthAmount !== undefined ? sub.monthAmount : sub.amount;
+
     h += `<li class="sub-row sub-row--clickable" onclick="openSubscriptionDetailModal('${sub.key}')" role="button" tabindex="0" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();openSubscriptionDetailModal('${sub.key}')}" title="${t("sub_view_transactions")}">
       <div class="sub-row__badge">${icon("refresh", 16)}</div>
       <div>
         <div class="sub-row__name">${esc(sub.name)}</div>
-        <div class="sub-row__meta">${freqLabel} · ${t("sub_last_charge").toLowerCase()} ${fmtDateShort(sub.lastDate)} · ${sub.occurrences} ${t("sub_occurrences")}</div>
+        <div class="sub-row__meta">${freqLabel} · ${t("sub_charged_on").toLowerCase()} ${fmtDateShort(monthChargeDate)}${chargeCount > 1 ? ` · ${chargeCount} prélèvements` : ""}</div>
       </div>
       <div class="sub-row__cat-col">${cat ? esc(tCategoryName(cat)) : "—"}</div>
       <div>
-        <div class="sub-row__amount-col">${fmtMoney(sub.amount)}</div>
-        <div class="sub-row__monthly-mini">≈ ${fmtMoney(sub.monthlyCost)}/mois</div>
+        <div class="sub-row__amount-col">${fmtMoney(displayAmount)}</div>
       </div>
       <div class="sub-row__actions" onclick="event.stopPropagation()">
         ${kind === "suggestion" ? `

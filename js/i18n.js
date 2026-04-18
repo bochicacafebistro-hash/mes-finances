@@ -192,6 +192,21 @@ const TRANSLATIONS = {
   sub_over_budget:       { fr: "à vérifier",             es: "por verificar" },
   cat_add_quick:         { fr: "Créer une nouvelle catégorie", es: "Crear una nueva categoría" },
   cat_add_quick_short:   { fr: "Nouvelle",                es: "Nueva" },
+  sub_month_total:       { fr: "Total du mois",          es: "Total del mes" },
+  sub_month_charge:      { fr: "Prélevé ce mois-ci",     es: "Cobrado este mes" },
+  sub_not_this_month:    { fr: "Aucun prélèvement ce mois-ci", es: "Sin cargo este mes" },
+  sub_charged_on:        { fr: "Prélevé le",             es: "Cobrado el" },
+
+  // ── Outil reclassement paiements carte ───────────
+  fix_card_pmt_title:    { fr: "{n} paiement{s} de carte mal classé{s}", es: "{n} pagos de tarjeta mal clasificados" },
+  fix_card_pmt_desc:     { fr: "Ces transactions sont comptées comme revenus. Elles devraient être des transferts (paiement de la carte = remboursement de dette, pas un revenu).", es: "Estas transacciones cuentan como ingresos. Deberían ser transferencias." },
+  fix_card_pmt_action:   { fr: "Convertir en transferts ({n})", es: "Convertir a transferencias ({n})" },
+  fix_card_pmt_done:     { fr: "✅ {n} paiement{s} reclassé{s} en transferts. Tes revenus sont maintenant corrects.", es: "✅ {n} pagos reclasificados como transferencias." },
+
+  // ── Filtres transactions ─────────────────────────
+  tx_filters:            { fr: "Filtres",                es: "Filtros" },
+  tx_filter_reset:       { fr: "Réinitialiser",          es: "Restablecer" },
+  tx_filter_results:     { fr: "{n} transaction{s}",     es: "{n} transacciones" },
 
   // ── Catégorie détail (modal depuis top dépenses) ──
   cat_detail_title:      { fr: "Détail de la catégorie", es: "Detalle de la categoría" },

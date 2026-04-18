@@ -275,5 +275,45 @@ function getMonthlyExpenseByCategory(year, month) {
   return result;
 }
 
+// ── Détection : paiements de carte mal classés comme revenus ─────
+function detectMisclassifiedCardPayments() {
+  const creditAccountIds = new Set(
+    accounts.filter(a => a.type === "credit").map(a => a.id)
+  );
+  return transactions.filter(tx => {
+    if (tx.type !== "income") return false;
+    if (!creditAccountIds.has(tx.accountId)) return false;
+    const desc = (tx.description || "").toLowerCase();
+    return desc.includes("paiement") || desc.includes("payment") || desc.includes("caisse");
+  });
+}
+
+// ── Bulk : convertit tous les paiements de carte en transferts ───
+async function fixCardPaymentsBulk() {
+  const misclass = detectMisclassifiedCardPayments();
+  if (misclass.length === 0) return 0;
+
+  // Firestore limite à 500 ops par batch
+  const chunks = [];
+  for (let i = 0; i < misclass.length; i += 450) {
+    chunks.push(misclass.slice(i, i + 450));
+  }
+
+  for (const chunk of chunks) {
+    const batch = db.batch();
+    chunk.forEach(tx => {
+      batch.update(db.collection("transactions").doc(tx.id), {
+        type: "transfer",
+        toAccountId: tx.accountId,  // La carte devient la destination
+        accountId: null,             // Source externe (paiement depuis un compte non suivi)
+        categoryId: null,
+        updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+      });
+    });
+    await batch.commit();
+  }
+  return misclass.length;
+}
+
 // ── Resize listener ───────────────────────────────────
 window.addEventListener("resize", () => { if (isLoggedIn) renderPage(); });
