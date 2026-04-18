@@ -4,11 +4,14 @@ function buildSidebar() {
   const nav = document.getElementById("sidebar-nav"); if (!nav) return;
   const items = [
     { section: t("nav_section_main") },
-    { icon: "bar-chart", label: t("nav_dashboard"),    page: "dashboard" },
-    { icon: "clipboard", label: t("nav_transactions"), page: "transactions" },
-    { icon: "wallet",    label: t("nav_accounts"),     page: "accounts" },
+    { icon: "bar-chart",    label: t("nav_dashboard"),     page: "dashboard" },
+    { icon: "clipboard",    label: t("nav_transactions"),  page: "transactions" },
+    { icon: "wallet",       label: t("nav_accounts"),      page: "accounts" },
+    { section: t("nav_section_planning") },
+    { icon: "trending-up",  label: t("nav_budget"),        page: "budget" },
+    { icon: "refresh",      label: t("nav_subscriptions"), page: "subscriptions" },
     { section: t("nav_section_settings") },
-    { icon: "tag",       label: t("nav_categories"),   page: "categories" },
+    { icon: "tag",          label: t("nav_categories"),    page: "categories" },
   ];
 
   nav.innerHTML = items.map(item => {
@@ -79,10 +82,12 @@ initMobileMenu();
 // ── Rendu principal ───────────────────────────────────
 function renderPage() {
   const pageMeta = {
-    dashboard:    { label: t("nav_dashboard"),    icon: "bar-chart" },
-    transactions: { label: t("nav_transactions"), icon: "clipboard" },
-    accounts:     { label: t("nav_accounts"),     icon: "wallet" },
-    categories:   { label: t("nav_categories"),   icon: "tag" }
+    dashboard:     { label: t("nav_dashboard"),     icon: "bar-chart" },
+    transactions:  { label: t("nav_transactions"),  icon: "clipboard" },
+    accounts:      { label: t("nav_accounts"),      icon: "wallet" },
+    budget:        { label: t("nav_budget"),        icon: "trending-up" },
+    subscriptions: { label: t("nav_subscriptions"), icon: "refresh" },
+    categories:    { label: t("nav_categories"),    icon: "tag" }
   };
   const meta = pageMeta[activePage] || { label: activePage, icon: "file-text" };
   const titleEl = document.getElementById("topbar-title");
@@ -92,6 +97,13 @@ function renderPage() {
   if (activePage === "dashboard") pc.innerHTML = renderDashboard();
   else if (activePage === "transactions") pc.innerHTML = renderTransactions();
   else if (activePage === "accounts") pc.innerHTML = renderAccounts();
+  else if (activePage === "budget") pc.innerHTML = renderBudgetPage();
+  else if (activePage === "subscriptions") pc.innerHTML = renderSubscriptionsPage();
   else if (activePage === "categories") pc.innerHTML = renderCategoriesPage();
   else pc.innerHTML = `<div class="page"><div class="empty">Page introuvable.</div></div>`;
+
+  // Initialise les graphiques après le rendu HTML
+  if (activePage === "dashboard" && typeof initDashCharts === "function") {
+    setTimeout(initDashCharts, 50);
+  }
 }

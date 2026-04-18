@@ -139,5 +139,141 @@ function changeMonth(delta) {
   setMonth(y, m);
 }
 
+// ── Budget helpers ────────────────────────────────────
+function getBudgetForCategory(categoryId) {
+  return budgets.find(b => b.categoryId === categoryId);
+}
+
+function getCategorySpendThisMonth(categoryId) {
+  const start = monthStart(txFilterYear, txFilterMonth);
+  const end = monthEnd(txFilterYear, txFilterMonth);
+  return transactions
+    .filter(tx => tx.type === "expense" && tx.categoryId === categoryId && tx.date >= start && tx.date <= end)
+    .reduce((s, tx) => s + Number(tx.amount || 0), 0);
+}
+
+function getBudgetStatus(spent, limit) {
+  if (!limit || limit <= 0) return { pct: 0, status: "none", color: "var(--text3)" };
+  const pct = (spent / limit) * 100;
+  if (pct >= 100) return { pct, status: "over", color: "var(--status-red)" };
+  if (pct >= 80)  return { pct, status: "watch", color: "var(--status-orange, #f59e0b)" };
+  return { pct, status: "ok", color: "var(--status-green)" };
+}
+
+// ── Normalisation de marchand (pour détection d'abonnements) ─────
+function normalizeMerchantName(desc) {
+  if (!desc) return "";
+  let s = desc.toUpperCase();
+  // Retire les accents
+  s = s.normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+  // Retire les chiffres, codes de référence, suffixes de ville
+  s = s.replace(/\b\d{3,}\b/g, " ");                   // codes numériques
+  s = s.replace(/\b(QC|QUEBEC|MONTREAL|ONTARIO|ON|BC|AB|CA|CANADA)\b/g, " ");
+  s = s.replace(/\s*#\s*\d+/g, " ");                    // #numéro de succursale
+  s = s.replace(/[^A-Z\s&*]/g, " ");                    // garde lettres, espaces, &, *
+  s = s.replace(/\s+/g, " ").trim();
+  // Prend les 3 premiers mots significatifs
+  const words = s.split(" ").filter(w => w.length >= 2);
+  return words.slice(0, 3).join(" ");
+}
+
+// ── Détection automatique des abonnements (heuristique) ──────────
+function detectRecurringTransactions() {
+  const expenses = transactions.filter(tx => tx.type === "expense" && tx.date);
+  const groups = {};
+  expenses.forEach(tx => {
+    const key = normalizeMerchantName(tx.description);
+    if (!key || key.length < 3) return;
+    if (!groups[key]) groups[key] = [];
+    groups[key].push(tx);
+  });
+
+  const detected = [];
+  for (const [key, txs] of Object.entries(groups)) {
+    if (txs.length < 2) continue;
+    // Trie par date
+    txs.sort((a, b) => a.date.localeCompare(b.date));
+    // Calcule les intervalles en jours
+    const intervals = [];
+    for (let i = 1; i < txs.length; i++) {
+      const d1 = new Date(txs[i-1].date + "T12:00:00");
+      const d2 = new Date(txs[i].date + "T12:00:00");
+      intervals.push(Math.round((d2 - d1) / (1000 * 60 * 60 * 24)));
+    }
+    if (intervals.length === 0) continue;
+    const avgInterval = intervals.reduce((s, i) => s + i, 0) / intervals.length;
+    // On considère récurrent si l'intervalle moyen est entre 6 et 400 jours
+    if (avgInterval < 6 || avgInterval > 400) continue;
+    // Variance : les intervalles doivent être relativement stables
+    const variance = intervals.reduce((s, i) => s + Math.pow(i - avgInterval, 2), 0) / intervals.length;
+    const stdDev = Math.sqrt(variance);
+    // Si la déviation dépasse 40% de la moyenne, c'est probablement pas un abonnement fixe
+    if (stdDev / avgInterval > 0.5) continue;
+    // Montant médian
+    const amounts = txs.map(tx => Number(tx.amount || 0)).sort((a, b) => a - b);
+    const medianAmount = amounts[Math.floor(amounts.length / 2)];
+    // Fréquence présumée
+    let frequency = "monthly";
+    if (avgInterval <= 10) frequency = "weekly";
+    else if (avgInterval <= 20) frequency = "biweekly";
+    else if (avgInterval <= 45) frequency = "monthly";
+    else if (avgInterval <= 200) frequency = "quarterly";
+    else frequency = "yearly";
+
+    // Estimation du coût mensuel
+    const monthlyCost = medianAmount * (30 / avgInterval);
+
+    detected.push({
+      key,
+      name: txs[txs.length - 1].description, // Dernière description complète
+      amount: medianAmount,
+      monthlyCost,
+      frequency,
+      avgIntervalDays: Math.round(avgInterval),
+      occurrences: txs.length,
+      lastDate: txs[txs.length - 1].date,
+      firstDate: txs[0].date,
+      accountId: txs[txs.length - 1].accountId,
+      categoryId: txs[txs.length - 1].categoryId,
+      transactionIds: txs.map(tx => tx.id)
+    });
+  }
+  // Trie par coût mensuel décroissant
+  detected.sort((a, b) => b.monthlyCost - a.monthlyCost);
+  return detected;
+}
+
+function getSubscriptionState(key) {
+  return subscriptions.find(s => s.key === key);
+}
+
+// ── Navigation de mois absolue (pour graphiques) ─────────────────
+function offsetMonth(year, month, delta) {
+  let m = month + delta;
+  let y = year;
+  while (m < 0) { m += 12; y -= 1; }
+  while (m > 11) { m -= 12; y += 1; }
+  return { year: y, month: m };
+}
+
+function monthKey(year, month) {
+  return `${year}-${String(month + 1).padStart(2, "0")}`;
+}
+
+// ── Filtre date : transactions dans un mois donné ────────────────
+function getMonthlyExpenseByCategory(year, month) {
+  const start = monthStart(year, month);
+  const end = monthEnd(year, month);
+  const result = {};
+  transactions
+    .filter(tx => tx.type === "expense" && tx.date >= start && tx.date <= end)
+    .forEach(tx => {
+      const catId = tx.categoryId || "_none";
+      if (!result[catId]) result[catId] = 0;
+      result[catId] += Number(tx.amount || 0);
+    });
+  return result;
+}
+
 // ── Resize listener ───────────────────────────────────
 window.addEventListener("resize", () => { if (isLoggedIn) renderPage(); });

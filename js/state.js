@@ -2,6 +2,8 @@
 let accounts = [];
 let transactions = [];
 let categories = [];
+let budgets = [];          // { id, categoryId, monthlyLimit }
+let subscriptions = [];    // { id, key, name, amount, frequency, lastDate, accountId, categoryId, active }
 
 let isLoggedIn = false, isAdmin = false, pinBuffer = "", darkMode = false;
 let activePage = "dashboard";

@@ -7,8 +7,11 @@ const TRANSLATIONS = {
   nav_dashboard:         { fr: "Tableau de bord",      es: "Panel" },
   nav_transactions:      { fr: "Transactions",         es: "Transacciones" },
   nav_accounts:          { fr: "Comptes",              es: "Cuentas" },
+  nav_budget:            { fr: "Budget",               es: "Presupuesto" },
+  nav_subscriptions:     { fr: "Abonnements",          es: "Suscripciones" },
   nav_categories:        { fr: "Catégories",           es: "Categorías" },
   nav_section_main:      { fr: "PRINCIPAL",            es: "PRINCIPAL" },
+  nav_section_planning:  { fr: "PLANIFICATION",        es: "PLANIFICACIÓN" },
   nav_section_settings:  { fr: "PARAMÈTRES",           es: "AJUSTES" },
 
   // ── Boutons globaux ───────────────────────────────
@@ -122,6 +125,50 @@ const TRANSLATIONS = {
   confirm_delete_msg:    { fr: 'Voulez-vous vraiment supprimer "{name}" ? Cette action est irréversible.', es: '¿Realmente deseas eliminar "{name}"? Esta acción es irreversible.' },
   confirm_delete_account_msg: { fr: 'Supprimer le compte "{name}" supprimera aussi toutes ses transactions ! Continuer ?', es: 'Eliminar la cuenta "{name}" también eliminará todas sus transacciones! ¿Continuar?' },
   confirm_delete_category_msg:{ fr: 'Supprimer "{name}" ? Les transactions liées resteront mais sans catégorie.', es: 'Eliminar "{name}"? Las transacciones vinculadas se mantendrán pero sin categoría.' },
+
+  // ── Budget ───────────────────────────────────────
+  budget_title:          { fr: "Budget mensuel",       es: "Presupuesto mensual" },
+  budget_subtitle:       { fr: "Définissez vos limites mensuelles par catégorie", es: "Define tus límites mensuales por categoría" },
+  budget_set_limit:      { fr: "Définir une limite",   es: "Definir un límite" },
+  budget_monthly_limit:  { fr: "Limite mensuelle ($)", es: "Límite mensual ($)" },
+  budget_spent:          { fr: "Dépensé",              es: "Gastado" },
+  budget_remaining:      { fr: "Restant",              es: "Restante" },
+  budget_exceeded:       { fr: "Dépassé de",           es: "Excedido en" },
+  budget_none:           { fr: "Aucun budget défini. Ajoute une limite sur une catégorie pour commencer.", es: "Ningún presupuesto definido. Agrega un límite en una categoría para comenzar." },
+  budget_summary:        { fr: "Budget du mois",       es: "Presupuesto del mes" },
+  budget_warnings:       { fr: "catégorie(s) dépassée(s)", es: "categoría(s) excedida(s)" },
+  budget_ok:             { fr: "Dans les clous",       es: "Dentro del límite" },
+  budget_watch:          { fr: "À surveiller",         es: "Para vigilar" },
+  budget_over:           { fr: "Dépassé",              es: "Excedido" },
+  budget_edit:           { fr: "Modifier le budget",   es: "Editar presupuesto" },
+  budget_remove:         { fr: "Retirer le budget",    es: "Quitar presupuesto" },
+  budget_no_limit:       { fr: "Pas de limite",        es: "Sin límite" },
+  budget_total_limit:    { fr: "Total des limites",    es: "Total de límites" },
+  budget_total_spent:    { fr: "Total dépensé",        es: "Total gastado" },
+
+  // ── Abonnements ──────────────────────────────────
+  sub_title:             { fr: "Abonnements détectés", es: "Suscripciones detectadas" },
+  sub_subtitle:          { fr: "Repère les paiements récurrents pour éviter les surprises", es: "Identifica los pagos recurrentes para evitar sorpresas" },
+  sub_detected:          { fr: "Abonnements identifiés", es: "Suscripciones identificadas" },
+  sub_confirmed:         { fr: "Confirmés",            es: "Confirmados" },
+  sub_suggestions:       { fr: "Suggestions",          es: "Sugerencias" },
+  sub_ignored:           { fr: "Ignorés",              es: "Ignorados" },
+  sub_monthly:           { fr: "Mensuel",              es: "Mensual" },
+  sub_yearly:            { fr: "Annuel",               es: "Anual" },
+  sub_weekly:            { fr: "Hebdomadaire",         es: "Semanal" },
+  sub_biweekly:          { fr: "Aux 2 semaines",       es: "Cada 2 semanas" },
+  sub_estimated_total:   { fr: "Coût mensuel estimé",  es: "Costo mensual estimado" },
+  sub_last_charge:       { fr: "Dernier prélèvement",  es: "Último cargo" },
+  sub_occurrences:       { fr: "occurrences",          es: "ocurrencias" },
+  sub_confirm:           { fr: "C'est un abonnement",  es: "Es una suscripción" },
+  sub_ignore:            { fr: "Ignorer",              es: "Ignorar" },
+  sub_unconfirm:         { fr: "Retirer de la liste",  es: "Quitar de la lista" },
+  sub_none_detected:     { fr: "Aucun abonnement détecté pour l'instant. Il faut au moins 2 paiements du même marchand pour détecter un abonnement.", es: "Ninguna suscripción detectada por ahora. Se necesitan al menos 2 pagos del mismo comerciante para detectar una suscripción." },
+  sub_auto_detected:     { fr: "Détectés automatiquement", es: "Detectados automáticamente" },
+
+  // ── Catégorie détail (modal depuis top dépenses) ──
+  cat_detail_title:      { fr: "Détail de la catégorie", es: "Detalle de la categoría" },
+  cat_detail_tx_count:   { fr: "{n} transaction{s}",   es: "{n} transaccion{s}" },
 };
 
 let uiLang = localStorage.getItem("finances-ui-lang") || "fr";

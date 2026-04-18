@@ -16,3 +16,13 @@ db.collection("categories").onSnapshot(snap => {
     .sort((a, b) => (a.name_fr || a.name || "").localeCompare(b.name_fr || b.name || ""));
   if (isLoggedIn) renderPage();
 });
+
+db.collection("budgets").onSnapshot(snap => {
+  budgets = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+  if (isLoggedIn) renderPage();
+});
+
+db.collection("subscriptions").onSnapshot(snap => {
+  subscriptions = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+  if (isLoggedIn) renderPage();
+});
