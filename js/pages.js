@@ -549,7 +549,7 @@ function renderAccounts() {
 // Modal Compte
 function openAccountModal(id) {
   const a = id ? accounts.find(x => x.id === id) : null;
-  const colors = ["#6b1a1f", "#27ae60", "#4a90e2", "#f5a623", "#e74c3c", "#8b5cf6", "#ec4899", "#14b8a6"];
+  const colors = ["#10b981", "#f97316", "#2563eb", "#f59e0b", "#ef4444", "#8b5cf6", "#ec4899", "#14b8a6"];
   showModal(`<div class="modal">
     <div class="modal-header">
       <h3>${a ? t("acc_modal_edit") : t("acc_modal_add")}</h3>
@@ -1016,7 +1016,7 @@ async function initDefaultCategories() {
 // Modal Catégorie
 function openCategoryModal(id) {
   const c = id ? categories.find(x => x.id === id) : null;
-  const colors = ["#27ae60", "#e74c3c", "#4a90e2", "#f5a623", "#8b5cf6", "#ec4899", "#14b8a6", "#f97316", "#6b1a1f", "#64748b"];
+  const colors = ["#10b981", "#ef4444", "#2563eb", "#f59e0b", "#8b5cf6", "#ec4899", "#14b8a6", "#f97316", "#0ea5e9", "#64748b"];
   const iconChoices = ["folder", "tag", "wallet", "utensils", "store", "package", "receipt", "shield-check", "dollar-sign", "trending-up", "trending-down", "star", "calendar"];
 
   showModal(`<div class="modal">
@@ -1135,13 +1135,13 @@ function initDashCharts() {
   if (typeof Chart === "undefined") return;
 
   const isDark = document.body.classList.contains("dark");
-  // Palette Serene Minimal
-  const inkColor    = isDark ? "#f3efe7" : "#1a1915";
-  const mutedColor  = isDark ? "#8a877d" : "#6b6a64";
-  const sageColor   = isDark ? "#9fb074" : "#6b7a4a";
-  const warnColor   = isDark ? "#d47a5f" : "#a04a34";
-  const cardBg      = isDark ? "#1c1a15" : "#fbf8f2";
-  const gridColor   = isDark ? "rgba(243,239,231,0.06)" : "rgba(26,25,21,0.06)";
+  // Palette Bright & Clear (Emeraude + Orange)
+  const inkColor    = isDark ? "#f8fafc" : "#0f172a";
+  const mutedColor  = isDark ? "#94a3b8" : "#64748b";
+  const sageColor   = isDark ? "#34d399" : "#10b981";
+  const warnColor   = isDark ? "#fb923c" : "#f97316";
+  const cardBg      = isDark ? "#111827" : "#ffffff";
+  const gridColor   = isDark ? "rgba(255,255,255,0.06)" : "rgba(15,23,42,0.06)";
 
   Chart.defaults.color = mutedColor;
   Chart.defaults.font.family = "Inter, system-ui, sans-serif";

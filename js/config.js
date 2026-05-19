@@ -33,7 +33,7 @@ const DEFAULT_EXPENSE_CATEGORIES = [
   { name_fr: "Factures & Abonnements", name_es: "Facturas y suscripciones", icon: "receipt", color: "#f59e0b", type: "expense" },
   { name_fr: "Santé",            name_es: "Salud",             icon: "shield-check", color: "#ec4899", type: "expense" },
   { name_fr: "Loisirs",          name_es: "Ocio",              icon: "star",         color: "#14b8a6", type: "expense" },
-  { name_fr: "Vêtements",        name_es: "Ropa",              icon: "tag",          color: "#6b1a1f", type: "expense" },
+  { name_fr: "Vêtements",        name_es: "Ropa",              icon: "tag",          color: "#a855f7", type: "expense" },
   { name_fr: "Cadeaux",          name_es: "Regalos",           icon: "tag",          color: "#f97316", type: "expense" },
   { name_fr: "Autres",           name_es: "Otros",             icon: "folder",       color: "#64748b", type: "expense" }
 ];
