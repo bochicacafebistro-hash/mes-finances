@@ -4,7 +4,12 @@ function genId() { return Math.random().toString(36).slice(2, 10); }
 
 function fmtMoney(n) {
   const num = Number(n || 0);
-  return `${num.toFixed(2)} ${CURRENCY_SYMBOL}`;
+  // Format québécois : "40 012,00 $" (espace insécable comme séparateur, virgule pour décimal)
+  const formatted = num.toLocaleString("fr-CA", {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2
+  });
+  return `${formatted} ${CURRENCY_SYMBOL || "$"}`;
 }
 
 function fmtDate(d) {

@@ -2023,7 +2023,7 @@ function calculateRealEstateMetrics(a) {
   } else if (grossAnnualRent > 0 && a.purchasePrice > 0) {
     // Seuils ajustés pour le marché québécois urbain (Montréal/Québec) où cap rate 6%+ est rare en 2026
     if (monthlyCashFlow < -300) verdict = "bad";                            // Tolère un petit déficit si les fondamentaux sont bons
-    else if (capRate < 4 || mrb > 12 || stressMonthlyCashFlow < -300) verdict = "risky";
+    else if (capRate < 4 || mrb > 14 || stressMonthlyCashFlow < -300) verdict = "risky";
     else if (capRate >= 5 && mrb <= 10 && stressMonthlyCashFlow >= 0) verdict = "excellent";  // 5%/10 réaliste Qc
     else verdict = "good";
   }
@@ -2145,7 +2145,7 @@ function getVerdictReasons(a, m) {
         title: `Prix raisonnable par rapport aux loyers (MRB ${m.mrb.toFixed(1)})`,
         detail: `L'immeuble coûte ${m.mrb.toFixed(1)} × les revenus locatifs annuels. Plus le chiffre est bas, mieux c'est — sous 8, c'est généralement une bonne affaire au Québec.`
       });
-    } else if (m.mrb <= 12) {
+    } else if (m.mrb <= 14) {
       reasons.push({
         status: "warn",
         title: `Prix moyen par rapport aux loyers (MRB ${m.mrb.toFixed(1)})`,
@@ -2155,7 +2155,7 @@ function getVerdictReasons(a, m) {
       reasons.push({
         status: "fail",
         title: `Prix élevé par rapport aux loyers (MRB ${m.mrb.toFixed(1)})`,
-        detail: `L'immeuble coûte ${m.mrb.toFixed(1)} × les revenus locatifs annuels — c'est plus de 12 ×, donc cher. Tu paries fortement sur l'appréciation future plutôt que sur les revenus locatifs.`
+        detail: `L'immeuble coûte ${m.mrb.toFixed(1)} × les revenus locatifs annuels — c'est plus de 14 ×, donc cher pour le Québec. Tu paries fortement sur l'appréciation future plutôt que sur les revenus locatifs.`
       });
     }
   }
@@ -2335,7 +2335,8 @@ function reSuggestedPrice(a) {
   const priceFromCapExcellent  = noi / 0.05;  // 5%
 
   // (c) MRB cible : price/grossAnnual ≤ cible  →  price ≤ grossAnnual × cible
-  const priceFromMrbGood       = grossAnnualRent * 12; // ≤ 12
+  // Seuils ajustés pour le marché tendu du Québec (Montréal/Québec city)
+  const priceFromMrbGood       = grossAnnualRent * 14; // ≤ 14
   const priceFromMrbExcellent  = grossAnnualRent * 10; // ≤ 10
 
   // Si NOI ≤ 0, aucun prix ne peut donner un bon investissement (les charges dépassent les loyers)
@@ -2766,6 +2767,10 @@ function renderSuggestedPriceCard(a) {
   const excellentPrice = Math.max(0, Math.round(s.excellentPrice));
   const diffGood = asking - goodPrice;
   const diffExcellent = asking - excellentPrice;
+  // Rabais en pourcentage (ce qu'il faudrait négocier sur le prix demandé)
+  const pctGood = asking > 0 ? (diffGood / asking) * 100 : 0;
+  const pctExcellent = asking > 0 ? (diffExcellent / asking) * 100 : 0;
+  const fmtPct = (p) => (p >= 0 ? "−" : "+") + Math.abs(p).toFixed(1) + "%";
   const bindingLabels = {
     cashflow: t("re_binding_cashflow"),
     capRate:  t("re_binding_cap_rate"),
@@ -2812,7 +2817,10 @@ function renderSuggestedPriceCard(a) {
         <div class="re-suggested__row re-suggested__row--excellent">
           <div class="re-suggested__label">${t("re_suggested_push_excellent")}</div>
           <div class="re-suggested__price re-suggested__price--excellent">${fmtMoney(excellentPrice)}</div>
-          <div class="re-suggested__diff re-suggested__diff--save">−${fmtMoney(Math.abs(diffExcellent))}</div>
+          <div class="re-suggested__diff re-suggested__diff--save">
+            <span class="re-suggested__diff-money">−${fmtMoney(Math.abs(diffExcellent))}</span>
+            <span class="re-suggested__diff-pct">${fmtPct(pctExcellent)}</span>
+          </div>
         </div>
         ${explainBlock}
       </div>
@@ -2832,13 +2840,19 @@ function renderSuggestedPriceCard(a) {
       <div class="re-suggested__row re-suggested__row--good">
         <div class="re-suggested__label">${t("re_suggested_good_label")}</div>
         <div class="re-suggested__price re-suggested__price--good">${fmtMoney(goodPrice)}</div>
-        ${asking > 0 ? `<div class="re-suggested__diff re-suggested__diff--save">−${fmtMoney(Math.abs(diffGood))}</div>` : ""}
+        ${asking > 0 ? `<div class="re-suggested__diff re-suggested__diff--save">
+          <span class="re-suggested__diff-money">−${fmtMoney(Math.abs(diffGood))}</span>
+          <span class="re-suggested__diff-pct">${fmtPct(pctGood)}</span>
+        </div>` : ""}
       </div>
 
       <div class="re-suggested__row re-suggested__row--excellent">
         <div class="re-suggested__label">${t("re_suggested_excellent_label")}</div>
         <div class="re-suggested__price re-suggested__price--excellent">${fmtMoney(excellentPrice)}</div>
-        ${asking > 0 ? `<div class="re-suggested__diff re-suggested__diff--save">−${fmtMoney(Math.abs(diffExcellent))}</div>` : ""}
+        ${asking > 0 ? `<div class="re-suggested__diff re-suggested__diff--save">
+          <span class="re-suggested__diff-money">−${fmtMoney(Math.abs(diffExcellent))}</span>
+          <span class="re-suggested__diff-pct">${fmtPct(pctExcellent)}</span>
+        </div>` : ""}
       </div>
 
       ${explainBlock}
