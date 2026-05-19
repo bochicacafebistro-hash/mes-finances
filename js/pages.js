@@ -2044,6 +2044,14 @@ function calculateRealEstateMetrics(a) {
   };
 }
 
+// Helper : génère un mini-bouton "ⓘ" cliquable/survolable avec tooltip
+function reTip(key) {
+  const text = t(key);
+  if (!text || text === key) return "";
+  // tabindex pour accessibilité + onclick pour mobile (toggle .is-open)
+  return `<span class="re-tip" tabindex="0" data-tip="${esc(text)}" role="button" aria-label="Définition" onclick="this.classList.toggle('is-open');event.stopPropagation()">i</span>`;
+}
+
 // Décompose le verdict en raisons explicites compréhensibles
 function getVerdictReasons(a, m) {
   if (m.verdict === "unknown") {
@@ -2434,11 +2442,11 @@ function renderRealEstateEdit() {
             </label>
             <label class="re-field">
               <span>${t("re_field_price")}</span>
-              <input type="number" min="0" step="1000" value="${a.purchasePrice || ""}" oninput="reCurrent.purchasePrice=Number(this.value)||0;reRefreshDownPaymentHint();reRefresh()">
+              <input type="number" inputmode="numeric" min="0" step="1000" value="${a.purchasePrice || ""}" oninput="reCurrent.purchasePrice=Math.max(0,Number(this.value)||0);reRefreshDownPaymentHint();reRefresh()">
             </label>
             <div class="re-field">
               <div class="re-field__head">
-                <span>${t("re_field_downpayment")}</span>
+                <span>${t("re_field_downpayment")}${reTip("re_tip_dp_mode")}</span>
                 <div class="re-toggle" role="tablist">
                   <button type="button" class="re-toggle__btn ${a.downPaymentMode !== "percent" ? "is-active" : ""}" onclick="reSetDownPaymentMode('amount')">$</button>
                   <button type="button" class="re-toggle__btn ${a.downPaymentMode === "percent" ? "is-active" : ""}" onclick="reSetDownPaymentMode('percent')">%</button>
@@ -2446,13 +2454,13 @@ function renderRealEstateEdit() {
               </div>
               ${a.downPaymentMode === "percent" ? `
                 <div class="re-input-suffix">
-                  <input type="number" min="0" max="100" step="0.5" value="${a.downPaymentPercent ?? ""}" oninput="reCurrent.downPaymentPercent=Number(this.value)||0;reRefreshDownPaymentHint();reRefresh()">
+                  <input type="number" inputmode="decimal" min="0" max="100" step="0.5" value="${a.downPaymentPercent ?? ""}" oninput="reCurrent.downPaymentPercent=Math.min(100,Math.max(0,Number(this.value)||0));reRefreshDownPaymentHint();reRefresh()">
                   <span class="re-input-suffix__symbol">%</span>
                 </div>
               ` : `
                 <div class="re-input-suffix">
                   <span class="re-input-suffix__symbol re-input-suffix__symbol--left">$</span>
-                  <input type="number" min="0" step="1000" value="${a.downPayment || ""}" oninput="reCurrent.downPayment=Number(this.value)||0;reRefreshDownPaymentHint();reRefresh()">
+                  <input type="number" inputmode="numeric" min="0" max="${Number(a.purchasePrice) || 99999999}" step="1000" value="${a.downPayment ?? ""}" oninput="reCurrent.downPayment=Math.max(0,Math.min(Number(reCurrent.purchasePrice)||Infinity, Number(this.value)||0));reRefreshDownPaymentHint();reRefresh()">
                 </div>
               `}
               <small class="re-hint" id="re-downpayment-hint">${reDownPaymentHintText(a)}</small>
@@ -2470,15 +2478,15 @@ function renderRealEstateEdit() {
           <h3 class="re-block__title">${t("re_section_mortgage")}</h3>
           <div class="re-fields">
             <label class="re-field">
-              <span>${t("re_field_amort")}</span>
-              <input type="number" min="1" max="40" step="1" value="${a.amortYears || ""}" oninput="reCurrent.amortYears=Number(this.value)||0;reRefresh()">
+              <span>${t("re_field_amort")}${reTip("re_tip_amort")}</span>
+              <input type="number" inputmode="numeric" min="1" max="40" step="1" value="${a.amortYears || ""}" oninput="reCurrent.amortYears=Math.min(40,Math.max(1,Number(this.value)||0));reRefresh()">
             </label>
             <label class="re-field">
-              <span>${t("re_field_rate")}</span>
-              <input type="number" min="0" max="20" step="0.01" value="${a.interestRate || ""}" oninput="reCurrent.interestRate=Number(this.value)||0;reRefresh()">
+              <span>${t("re_field_rate")}${reTip("re_tip_interest")}</span>
+              <input type="number" inputmode="decimal" min="0" max="25" step="0.01" value="${a.interestRate || ""}" oninput="reCurrent.interestRate=Math.min(25,Math.max(0,Number(this.value)||0));reRefresh()">
             </label>
             <label class="re-field re-field--wide">
-              <span>${t("re_field_payment_freq")}</span>
+              <span>${t("re_field_payment_freq")}${reTip("re_tip_payment_freq")}</span>
               <select onchange="reCurrent.paymentFrequency=this.value;reRefresh()">
                 <option value="monthly" ${a.paymentFrequency === "monthly" ? "selected" : ""}>${t("re_freq_monthly")}</option>
                 <option value="biweekly_accel" ${a.paymentFrequency === "biweekly_accel" ? "selected" : ""}>${t("re_freq_biweekly")}</option>
@@ -2493,49 +2501,58 @@ function renderRealEstateEdit() {
           <div class="re-fields">
             <label class="re-field">
               <span>${t("re_field_municipal_tax")}</span>
-              <input type="number" min="0" step="100" value="${a.municipalTax || ""}" oninput="reCurrent.municipalTax=Number(this.value)||0;reRefresh()">
+              <input type="number" inputmode="numeric" min="0" step="100" value="${a.municipalTax || ""}" oninput="reCurrent.municipalTax=Math.max(0,Number(this.value)||0);reRefresh()">
             </label>
             <label class="re-field">
               <span>${t("re_field_school_tax")}</span>
-              <input type="number" min="0" step="50" value="${a.schoolTax || ""}" oninput="reCurrent.schoolTax=Number(this.value)||0;reRefresh()">
+              <input type="number" inputmode="numeric" min="0" step="50" value="${a.schoolTax || ""}" oninput="reCurrent.schoolTax=Math.max(0,Number(this.value)||0);reRefresh()">
             </label>
             <label class="re-field">
               <span>${t("re_field_insurance")}</span>
-              <input type="number" min="0" step="50" value="${a.insurance || ""}" oninput="reCurrent.insurance=Number(this.value)||0;reRefresh()">
+              <input type="number" inputmode="numeric" min="0" step="50" value="${a.insurance || ""}" oninput="reCurrent.insurance=Math.max(0,Number(this.value)||0);reRefresh()">
             </label>
             <label class="re-field">
               <span>${t("re_field_electricity")}</span>
               <div class="re-input-suffix">
                 <span class="re-input-suffix__symbol re-input-suffix__symbol--left">$</span>
-                <input type="number" min="0" step="10" value="${a.electricity || ""}" oninput="reCurrent.electricity=Number(this.value)||0;reRefresh()">
+                <input type="number" inputmode="numeric" min="0" step="10" value="${a.electricity || ""}" oninput="reCurrent.electricity=Math.max(0,Number(this.value)||0);reRefresh()">
                 <span class="re-input-suffix__symbol">${t("re_metric_per_month")}</span>
               </div>
               <small class="re-hint">${t("re_field_electricity_hint")}</small>
             </label>
             <div class="re-field">
               <div class="re-field__head">
-                <input type="text" class="re-field__inline-input" placeholder="${t("re_field_other_service_placeholder")}" value="${esc(a.otherServiceName || "")}" oninput="reCurrent.otherServiceName=this.value">
+                <input type="text" class="re-field__inline-input" placeholder="${t("re_field_other_service_placeholder")}" value="${esc(a.otherServiceName || "")}" maxlength="50" oninput="reCurrent.otherServiceName=this.value">
               </div>
               <div class="re-input-suffix">
                 <span class="re-input-suffix__symbol re-input-suffix__symbol--left">$</span>
-                <input type="number" min="0" step="10" value="${a.otherServiceAmount || ""}" oninput="reCurrent.otherServiceAmount=Number(this.value)||0;reRefresh()">
+                <input type="number" inputmode="numeric" min="0" step="10" value="${a.otherServiceAmount || ""}" oninput="reCurrent.otherServiceAmount=Math.max(0,Number(this.value)||0);reRefresh()">
                 <span class="re-input-suffix__symbol">${t("re_metric_per_month")}</span>
               </div>
               <small class="re-hint">${t("re_field_other_service_hint")}</small>
             </div>
             <label class="re-field">
-              <span>${t("re_field_maintenance")}</span>
-              <input type="number" min="0" max="50" step="0.5" value="${a.maintenancePercent || ""}" oninput="reCurrent.maintenancePercent=Number(this.value)||0;reRefresh()">
+              <span>${t("re_field_maintenance")}${reTip("re_tip_maintenance")}</span>
+              <div class="re-input-suffix">
+                <input type="number" inputmode="decimal" min="0" max="50" step="0.5" value="${a.maintenancePercent ?? ""}" oninput="reCurrent.maintenancePercent=Math.min(50,Math.max(0,Number(this.value)||0));reRefresh()">
+                <span class="re-input-suffix__symbol">%</span>
+              </div>
               <small class="re-hint">${t("re_field_maintenance_hint")}</small>
             </label>
             <label class="re-field">
-              <span>${t("re_field_vacancy")}</span>
-              <input type="number" min="0" max="50" step="0.5" value="${a.vacancyPercent ?? ""}" oninput="reCurrent.vacancyPercent=Number(this.value)||0;reRefresh()">
+              <span>${t("re_field_vacancy")}${reTip("re_tip_vacancy")}</span>
+              <div class="re-input-suffix">
+                <input type="number" inputmode="decimal" min="0" max="50" step="0.5" value="${a.vacancyPercent ?? ""}" oninput="reCurrent.vacancyPercent=Math.min(50,Math.max(0,Number(this.value)||0));reRefresh()">
+                <span class="re-input-suffix__symbol">%</span>
+              </div>
               <small class="re-hint">${t("re_field_vacancy_hint")}</small>
             </label>
             <label class="re-field re-field--wide">
-              <span>${t("re_field_management")}</span>
-              <input type="number" min="0" max="30" step="0.5" value="${a.managementPercent ?? ""}" oninput="reCurrent.managementPercent=Number(this.value)||0;reRefresh()">
+              <span>${t("re_field_management")}${reTip("re_tip_management")}</span>
+              <div class="re-input-suffix">
+                <input type="number" inputmode="decimal" min="0" max="30" step="0.5" value="${a.managementPercent ?? ""}" oninput="reCurrent.managementPercent=Math.min(30,Math.max(0,Number(this.value)||0));reRefresh()">
+                <span class="re-input-suffix__symbol">%</span>
+              </div>
               <small class="re-hint">${t("re_field_management_hint")}</small>
             </label>
           </div>
@@ -2545,17 +2562,17 @@ function renderRealEstateEdit() {
           <h3 class="re-block__title">${t("re_section_projection")}</h3>
           <div class="re-fields">
             <label class="re-field">
-              <span>${t("re_field_appreciation")}</span>
+              <span>${t("re_field_appreciation")}${reTip("re_tip_appreciation")}</span>
               <div class="re-input-suffix">
-                <input type="number" min="-10" max="20" step="0.1" value="${a.appreciationPercent ?? ""}" oninput="reCurrent.appreciationPercent=Number(this.value)||0;reRefresh()">
+                <input type="number" inputmode="decimal" min="-10" max="30" step="0.1" value="${a.appreciationPercent ?? ""}" oninput="reCurrent.appreciationPercent=Math.min(30,Math.max(-10,Number(this.value)||0));reRefresh()">
                 <span class="re-input-suffix__symbol">% /an</span>
               </div>
               <small class="re-hint">${t("re_field_appreciation_hint")}</small>
             </label>
             <label class="re-field">
-              <span>${t("re_field_rent_increase")}</span>
+              <span>${t("re_field_rent_increase")}${reTip("re_tip_rent_increase")}</span>
               <div class="re-input-suffix">
-                <input type="number" min="-5" max="15" step="0.1" value="${a.rentIncreasePercent ?? ""}" oninput="reCurrent.rentIncreasePercent=Number(this.value)||0;reRefresh()">
+                <input type="number" inputmode="decimal" min="-5" max="20" step="0.1" value="${a.rentIncreasePercent ?? ""}" oninput="reCurrent.rentIncreasePercent=Math.min(20,Math.max(-5,Number(this.value)||0));reRefresh()">
                 <span class="re-input-suffix__symbol">% /an</span>
               </div>
               <small class="re-hint">${t("re_field_rent_increase_hint")}</small>
@@ -2576,7 +2593,7 @@ function renderRealEstateEdit() {
                 </div>
                 <label class="re-checkbox re-checkbox--owner">
                   <input type="checkbox" ${u.ownerOccupied ? "checked" : ""} onchange="reToggleOwnerOccupied(${i}, this.checked)">
-                  <span>${t("re_unit_owner_occupied")}</span>
+                  <span>${t("re_unit_owner_occupied")}${reTip("re_tip_owner_occupied")}</span>
                 </label>
                 ${u.ownerOccupied ? `
                   <div class="re-unit__hint">${t("re_unit_owner_hint")}</div>
@@ -2585,13 +2602,13 @@ function renderRealEstateEdit() {
                     <span>${t("re_unit_rent")}</span>
                     <div class="re-input-suffix">
                       <span class="re-input-suffix__symbol re-input-suffix__symbol--left">$</span>
-                      <input type="number" min="0" step="25" value="${u.rent || ""}" oninput="reCurrent.units[${i}].rent=Number(this.value)||0;reRefresh()">
+                      <input type="number" inputmode="numeric" min="0" max="20000" step="25" value="${u.rent || ""}" oninput="reCurrent.units[${i}].rent=Math.max(0,Number(this.value)||0);reRefresh()">
                       <span class="re-input-suffix__symbol">${t("re_metric_per_month")}</span>
                     </div>
                   </label>
                   <label class="re-checkbox">
                     <input type="checkbox" ${u.utilitiesIncluded ? "checked" : ""} onchange="reCurrent.units[${i}].utilitiesIncluded=this.checked">
-                    <span>${t("re_unit_utilities")}</span>
+                    <span>${t("re_unit_utilities")}${reTip("re_tip_utilities")}</span>
                   </label>
                 `}
                 ${a.unitType === "custom" && a.units.length > 1 ? `<button class="btn-link btn-link--danger" onclick="reRemoveUnit(${i})">${t("re_unit_remove")}</button>` : ""}
@@ -2647,48 +2664,48 @@ function renderRealEstateResults(a) {
 
       ${m.hasOwnerOccupied ? `
         <div class="re-metric re-metric--highlight">
-          <div class="re-metric__label">${icon("home", 12)} ${t("re_metric_cost_to_live")}</div>
+          <div class="re-metric__label">${icon("home", 12)} ${t("re_metric_cost_to_live")}${reTip("re_tip_cost_to_live")}</div>
           <div class="re-metric__value re-metric__value--big re-metric__value--${costClass}">${m.costToLiveMonthly <= 0 ? "+" : ""}${fmtMoney(Math.abs(m.costToLiveMonthly))}<span class="re-metric__suffix">${t("re_metric_per_month")}</span></div>
           <div class="re-metric__sub">${m.costToLiveMonthly > 0 ? t("re_metric_cost_to_live_neg") : t("re_metric_cost_to_live_pos")}</div>
         </div>
       ` : ""}
 
       <div class="re-metric">
-        <div class="re-metric__label">${t("re_metric_cashflow")}</div>
+        <div class="re-metric__label">${t("re_metric_cashflow")}${reTip("re_tip_cashflow")}</div>
         <div class="re-metric__value re-metric__value--big re-metric__value--${cfClass}">${fmtMoney(m.monthlyCashFlow)}<span class="re-metric__suffix">${t("re_metric_per_month")}</span></div>
         <div class="re-metric__sub">${fmtMoney(m.annualCashFlow)}${t("re_metric_per_year")}</div>
       </div>
 
       <div class="re-metric-row">
         <div class="re-metric">
-          <div class="re-metric__label">${t("re_metric_cap_rate")}</div>
+          <div class="re-metric__label">${t("re_metric_cap_rate")}${reTip("re_tip_cap_rate")}</div>
           <div class="re-metric__value">${m.capRate.toFixed(2)}%</div>
         </div>
         <div class="re-metric">
-          <div class="re-metric__label">${t("re_metric_mrb")}</div>
+          <div class="re-metric__label">${t("re_metric_mrb")}${reTip("re_tip_mrb")}</div>
           <div class="re-metric__value">${m.grossAnnualRent > 0 ? m.mrb.toFixed(1) : "—"}</div>
         </div>
       </div>
 
       <div class="re-metric-row">
-        <div class="re-metric" title="${t("re_metric_dscr_hint")}">
-          <div class="re-metric__label">${t("re_metric_dscr")}</div>
+        <div class="re-metric">
+          <div class="re-metric__label">${t("re_metric_dscr")}${reTip("re_tip_dscr")}</div>
           <div class="re-metric__value ${m.dscr !== null && m.dscr < 1 ? "re-metric__value--neg" : (m.dscr !== null && m.dscr >= 1.2 ? "re-metric__value--pos" : "")}">${m.dscr === null ? "—" : m.dscr.toFixed(2)}</div>
         </div>
-        <div class="re-metric" title="${t("re_metric_coc_hint")}">
-          <div class="re-metric__label">${t("re_metric_coc")}</div>
+        <div class="re-metric">
+          <div class="re-metric__label">${t("re_metric_coc")}${reTip("re_tip_coc")}</div>
           <div class="re-metric__value ${m.cashOnCash !== null && m.cashOnCash < 0 ? "re-metric__value--neg" : (m.cashOnCash !== null && m.cashOnCash >= 5 ? "re-metric__value--pos" : "")}">${m.cashOnCash === null ? "—" : m.cashOnCash.toFixed(2) + "%"}</div>
         </div>
       </div>
 
-      <div class="re-metric" title="${t("re_metric_breakeven_hint")}">
-        <div class="re-metric__label">${t("re_metric_breakeven")}</div>
+      <div class="re-metric">
+        <div class="re-metric__label">${t("re_metric_breakeven")}${reTip("re_tip_breakeven")}</div>
         <div class="re-metric__value ${m.breakEvenOccupancy !== null && m.breakEvenOccupancy > 95 ? "re-metric__value--neg" : (m.breakEvenOccupancy !== null && m.breakEvenOccupancy < 85 ? "re-metric__value--pos" : "")}">${m.breakEvenOccupancy === null ? "—" : m.breakEvenOccupancy.toFixed(1) + "%"}</div>
         <div class="re-metric__sub">${t("re_metric_breakeven_sub")}</div>
       </div>
 
       <div class="re-metric">
-        <div class="re-metric__label">${t("re_metric_mortgage_pmt")}</div>
+        <div class="re-metric__label">${t("re_metric_mortgage_pmt")}${reTip("re_tip_mortgage_pmt")}</div>
         <div class="re-metric__breakdown">
           <div><span>${t("re_metric_mortgage_monthly")}</span><strong>${fmtMoney(m.monthlyPmt)}</strong></div>
           <div><span>${t("re_metric_mortgage_biw")}</span><strong>${fmtMoney(m.biweeklyPmt)}</strong></div>
@@ -2697,23 +2714,23 @@ function renderRealEstateResults(a) {
       </div>
 
       <div class="re-metric">
-        <div class="re-metric__label">${t("re_metric_gross_rent")}</div>
+        <div class="re-metric__label">${t("re_metric_gross_rent")}${reTip("re_tip_gross_rent")}</div>
         <div class="re-metric__value">${fmtMoney(m.grossMonthlyRent)}<span class="re-metric__suffix">${t("re_metric_per_month")}</span></div>
         <div class="re-metric__sub">${fmtMoney(m.grossAnnualRent)}${t("re_metric_per_year")}</div>
       </div>
 
       <div class="re-metric">
-        <div class="re-metric__label">${t("re_metric_noi")}</div>
+        <div class="re-metric__label">${t("re_metric_noi")}${reTip("re_tip_noi")}</div>
         <div class="re-metric__value">${fmtMoney(m.noi)}${t("re_metric_per_year")}</div>
       </div>
 
       <div class="re-metric">
-        <div class="re-metric__label">${t("re_metric_total_exp")}</div>
+        <div class="re-metric__label">${t("re_metric_total_exp")}${reTip("re_tip_total_exp")}</div>
         <div class="re-metric__value">${fmtMoney(m.totalOpex)}${t("re_metric_per_year")}</div>
       </div>
 
       <div class="re-metric re-metric--stress">
-        <div class="re-metric__label">${t("re_metric_stress")}</div>
+        <div class="re-metric__label">${t("re_metric_stress")}${reTip("re_tip_stress")}</div>
         <div class="re-metric__value re-metric__value--${stressClass}">${fmtMoney(m.stressMonthlyCashFlow)}<span class="re-metric__suffix">${t("re_metric_per_month")}</span></div>
       </div>
 
@@ -2864,11 +2881,15 @@ function reRefreshDownPaymentHint() {
 function reDownPaymentHintText(a) {
   const price = Number(a.purchasePrice) || 0;
   if (a.downPaymentMode === "percent") {
-    const dollar = (price * (Number(a.downPaymentPercent) || 0)) / 100;
-    return price > 0 ? `≈ ${fmtMoney(dollar)}` : "Entre d'abord le prix d'achat pour voir l'équivalent en $.";
+    const pct = Number(a.downPaymentPercent) || 0;
+    const dollar = (price * pct) / 100;
+    if (price <= 0) return "Entre d'abord le prix d'achat pour voir l'équivalent en $.";
+    if (pct === 0) return "≈ 0 $ — Sans mise de fond, tu finances 100% du prix.";
+    return `≈ ${fmtMoney(dollar)}`;
   }
   const dp = Number(a.downPayment) || 0;
   if (price <= 0) return "Entre d'abord le prix d'achat pour voir l'équivalent en %.";
+  if (dp === 0) return "≈ 0% — Sans mise de fond, tu finances 100% du prix.";
   const pct = (dp / price) * 100;
   return `≈ ${pct.toFixed(1)}% du prix d'achat`;
 }
