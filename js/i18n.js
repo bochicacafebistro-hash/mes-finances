@@ -305,6 +305,21 @@ const TRANSLATIONS = {
   re_reasons_summary:    { fr: "Pourquoi cette évaluation ?",  es: "¿Por qué esta evaluación?" },
   re_confirm_delete:     { fr: "Supprimer cette analyse?",     es: "¿Eliminar este análisis?" },
 
+  // ── Prix d'offre suggéré ──────────────────────────
+  re_suggested_title:    { fr: "Prix d'offre conseillé",       es: "Precio de oferta sugerido" },
+  re_suggested_asking:   { fr: "Prix demandé",                 es: "Precio pedido" },
+  re_suggested_good_label:{ fr: "Pour un bon investissement",  es: "Para una buena inversión" },
+  re_suggested_excellent_label:{ fr: "Pour un excellent investissement", es: "Para una excelente inversión" },
+  re_suggested_why:      { fr: "Pourquoi ces prix ?",          es: "¿Por qué estos precios?" },
+  re_suggested_why_good: { fr: "Limité par : {constraint}. À ce prix, le cash flow est positif, le cap rate est ≥ 4% et le MRB est ≤ 12 (seuils acceptables pour le Québec urbain).", es: "Limitado por: {constraint}. Cash flow positivo, cap rate ≥ 4%, MRB ≤ 12." },
+  re_suggested_why_excellent:{ fr: "Limité par : {constraint}. À ce prix, le cash flow est positif, le cap rate est ≥ 5%, le MRB est ≤ 10 et l'immeuble passe le stress test +2%.", es: "Limitado por: {constraint}. Cash flow positivo, cap rate ≥ 5%, MRB ≤ 10, supera stress test +2%." },
+  re_suggested_note:     { fr: "Ces prix supposent les mêmes loyers, charges, mise de fond et taux que ton analyse actuelle. Change ces données et les prix conseillés s'ajustent.", es: "Los precios suponen los mismos parámetros actuales." },
+  re_suggested_infeasible_title:{ fr: "Aucun prix ne le rend rentable", es: "Ningún precio lo hace rentable" },
+  re_binding_cashflow:   { fr: "le seuil du cash flow équilibré (loyers nets = hypothèque)", es: "el flujo de caja equilibrado" },
+  re_binding_cap_rate:   { fr: "le cap rate cible (rendement minimum sur le prix)", es: "el cap rate objetivo" },
+  re_binding_mrb:        { fr: "le multiplicateur du revenu brut (rapport prix/loyers)", es: "el multiplicador del ingreso bruto" },
+  re_binding_stress:     { fr: "le stress test +2% (résistance à une hausse de taux)", es: "la prueba de estrés +2%" },
+
   // ── Tooltips explicatifs (langage simple) ─────────
   re_tip_gross_rent:     { fr: "Total des loyers que les locataires te paieraient si tous les logements étaient occupés toute l'année — avant toute dépense.", es: "Total de alquileres si todas las viviendas estuvieran ocupadas todo el año." },
   re_tip_noi:            { fr: "Revenu net d'exploitation (NOI) = loyers réels (après vacance) MOINS toutes les dépenses d'opération (taxes, assurances, services, entretien, gestion). MAIS avant le paiement de l'hypothèque. C'est ce que l'immeuble génère vraiment chaque année.", es: "Ingreso neto operativo (NOI) = alquileres efectivos menos gastos operativos, antes de la hipoteca." },

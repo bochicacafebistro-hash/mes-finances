@@ -2268,6 +2268,106 @@ function getVerdictReasons(a, m) {
   return reasons;
 }
 
+// Calcule le prix d'achat maximum qui ferait de cet immeuble un "bon" ou "excellent" investissement
+// en gardant tous les autres paramètres (loyers, charges, taux, mise de fond) identiques.
+function reSuggestedPrice(a) {
+  const grossAnnualRent = (a.units || [])
+    .filter(u => !u.ownerOccupied)
+    .reduce((s, u) => s + (Number(u.rent) || 0), 0) * 12;
+  // Pas applicable si pas de loyers (proprio-occupant pur ou données vides)
+  if (grossAnnualRent <= 0) return null;
+
+  const vacancyPct = Number(a.vacancyPercent) || 0;
+  const maintenancePct = Number(a.maintenancePercent) || 0;
+  const managementPct = Number(a.managementPercent) || 0;
+  const fixedOpex = (Number(a.municipalTax) || 0)
+                  + (Number(a.schoolTax) || 0)
+                  + (Number(a.insurance) || 0)
+                  + ((Number(a.electricity) || 0) + (Number(a.otherServiceAmount) || 0)) * 12;
+  const effIncome = grossAnnualRent * (1 - vacancyPct / 100);
+  const maintenance = grossAnnualRent * (maintenancePct / 100);
+  const management = effIncome * (managementPct / 100);
+  // NOI assume rent-based maintenance (simplification, le floor 0.5% du prix est ignoré ici)
+  const noi = effIncome - (fixedOpex + maintenance + management);
+
+  // Facteur d'hypothèque : paiement annuel par dollar de principal
+  const r = (Number(a.interestRate) || 0) / 100;
+  const n = (Number(a.amortYears) || 25) * 12;
+  const iMonthly = Math.pow(1 + r / 2, 2 / 12) - 1;
+  const mortFactor = (iMonthly === 0) ? 12 / n
+                   : 12 * iMonthly / (1 - Math.pow(1 + iMonthly, -n));
+  // Stress test +2%
+  const rStress = ((Number(a.interestRate) || 0) + 2) / 100;
+  const iStress = Math.pow(1 + rStress / 2, 2 / 12) - 1;
+  const mortFactorStress = (iStress === 0) ? 12 / n
+                         : 12 * iStress / (1 - Math.pow(1 + iStress, -n));
+
+  // Contraintes sur le prix max
+  // (a) Cash flow ≥ 0 :  NOI ≥ mortFactor × principal
+  //     - mode amount :  principal = price - dp  →  price ≤ NOI/mortFactor + dp
+  //     - mode percent : principal = price × (1 - dp%/100)  →  price ≤ NOI / (mortFactor × (1 - dp%/100))
+  const dpMode = a.downPaymentMode;
+  const dpAmount = Number(a.downPayment) || 0;
+  const dpPct = Number(a.downPaymentPercent) || 0;
+  let priceFromCashflow, priceFromStress;
+  if (dpMode === "percent") {
+    const principalCoef = 1 - dpPct / 100;
+    if (principalCoef <= 0) {
+      // 100% mise de fond → pas d'hypothèque → cash flow toujours = NOI > 0 normalement
+      priceFromCashflow = Infinity;
+      priceFromStress = Infinity;
+    } else {
+      priceFromCashflow = noi / (mortFactor * principalCoef);
+      priceFromStress   = noi / (mortFactorStress * principalCoef);
+    }
+  } else {
+    priceFromCashflow = noi / mortFactor + dpAmount;
+    priceFromStress   = noi / mortFactorStress + dpAmount;
+  }
+
+  // (b) Cap rate cible : NOI/price ≥ cible%  →  price ≤ NOI/cible
+  const priceFromCapGood       = noi / 0.04;  // 4%
+  const priceFromCapExcellent  = noi / 0.05;  // 5%
+
+  // (c) MRB cible : price/grossAnnual ≤ cible  →  price ≤ grossAnnual × cible
+  const priceFromMrbGood       = grossAnnualRent * 12; // ≤ 12
+  const priceFromMrbExcellent  = grossAnnualRent * 10; // ≤ 10
+
+  // Si NOI ≤ 0, aucun prix ne peut donner un bon investissement (les charges dépassent les loyers)
+  if (noi <= 0) {
+    return { noi, grossAnnualRent, infeasible: true,
+      reason: "Les charges opérationnelles dépassent les loyers, peu importe le prix d'achat. Augmenter les loyers, baisser les charges, ou choisir un autre immeuble." };
+  }
+
+  // Le prix maximum est le MINIMUM des contraintes
+  const goodCandidates = {
+    cashflow: priceFromCashflow,
+    capRate:  priceFromCapGood,
+    mrb:      priceFromMrbGood
+  };
+  const excellentCandidates = {
+    cashflow: priceFromCashflow,
+    capRate:  priceFromCapExcellent,
+    mrb:      priceFromMrbExcellent,
+    stress:   priceFromStress
+  };
+
+  const goodPrice      = Math.min(...Object.values(goodCandidates));
+  const excellentPrice = Math.min(...Object.values(excellentCandidates));
+
+  // Identifie quelle contrainte limite (pour le dropdown explicatif)
+  const goodBinding      = Object.entries(goodCandidates).reduce((acc, [k, v]) => v === goodPrice ? k : acc, null);
+  const excellentBinding = Object.entries(excellentCandidates).reduce((acc, [k, v]) => v === excellentPrice ? k : acc, null);
+
+  return {
+    grossAnnualRent, noi,
+    goodPrice, excellentPrice, goodBinding, excellentBinding,
+    candidates: { good: goodCandidates, excellent: excellentCandidates },
+    askingPrice: Number(a.purchasePrice) || 0,
+    infeasible: false
+  };
+}
+
 // Projection long terme : valeur future, solde hypothécaire, loyers cumulés, rendement annualisé
 function projectRealEstate(a, years) {
   years = Math.max(1, Math.min(50, Number(years) || 10));
@@ -2631,6 +2731,74 @@ function renderRealEstateEdit() {
   return h;
 }
 
+// Carte qui suggère un prix d'offre pour que ce soit un bon/excellent investissement
+function renderSuggestedPriceCard(a) {
+  const s = reSuggestedPrice(a);
+  if (!s) return ""; // pas de loyers → carte non pertinente
+  // Cas infaisable : charges > loyers, peu importe le prix
+  if (s.infeasible) {
+    return `
+      <div class="re-suggested re-suggested--infeasible">
+        <div class="re-suggested__title">${icon("alert-triangle", 14)} ${t("re_suggested_infeasible_title")}</div>
+        <div class="re-suggested__hint">${s.reason}</div>
+      </div>
+    `;
+  }
+  const asking = s.askingPrice;
+  const goodPrice = Math.max(0, Math.round(s.goodPrice));
+  const excellentPrice = Math.max(0, Math.round(s.excellentPrice));
+  const diffGood = asking - goodPrice;
+  const diffExcellent = asking - excellentPrice;
+  const bindingLabels = {
+    cashflow: t("re_binding_cashflow"),
+    capRate:  t("re_binding_cap_rate"),
+    mrb:      t("re_binding_mrb"),
+    stress:   t("re_binding_stress")
+  };
+  return `
+    <div class="re-suggested">
+      <div class="re-suggested__title">${icon("dollar-sign", 14)} ${t("re_suggested_title")}</div>
+
+      <div class="re-suggested__row">
+        <div class="re-suggested__label">${t("re_suggested_asking")}</div>
+        <div class="re-suggested__price re-suggested__price--asking">${fmtMoney(asking)}</div>
+      </div>
+
+      <div class="re-suggested__row re-suggested__row--good">
+        <div class="re-suggested__label">${t("re_suggested_good_label")}</div>
+        <div class="re-suggested__price re-suggested__price--good">${fmtMoney(goodPrice)}</div>
+        ${asking > 0 ? `<div class="re-suggested__diff ${diffGood >= 0 ? "re-suggested__diff--save" : "re-suggested__diff--over"}">${diffGood >= 0 ? "−" : "+"}${fmtMoney(Math.abs(diffGood))}</div>` : ""}
+      </div>
+
+      <div class="re-suggested__row re-suggested__row--excellent">
+        <div class="re-suggested__label">${t("re_suggested_excellent_label")}</div>
+        <div class="re-suggested__price re-suggested__price--excellent">${fmtMoney(excellentPrice)}</div>
+        ${asking > 0 ? `<div class="re-suggested__diff ${diffExcellent >= 0 ? "re-suggested__diff--save" : "re-suggested__diff--over"}">${diffExcellent >= 0 ? "−" : "+"}${fmtMoney(Math.abs(diffExcellent))}</div>` : ""}
+      </div>
+
+      <details class="re-suggested__details">
+        <summary class="re-suggested__more">
+          <span>${t("re_suggested_why")}</span>
+          <span class="re-verdict-details__chevron">▾</span>
+        </summary>
+        <div class="re-suggested__explain">
+          <div class="re-suggested__expl-row">
+            <strong>${t("re_suggested_good_label")} (${fmtMoney(goodPrice)})</strong>
+            <div>${t("re_suggested_why_good").replace("{constraint}", bindingLabels[s.goodBinding] || s.goodBinding)}</div>
+          </div>
+          <div class="re-suggested__expl-row">
+            <strong>${t("re_suggested_excellent_label")} (${fmtMoney(excellentPrice)})</strong>
+            <div>${t("re_suggested_why_excellent").replace("{constraint}", bindingLabels[s.excellentBinding] || s.excellentBinding)}</div>
+          </div>
+          <div class="re-suggested__expl-note">
+            ${t("re_suggested_note")}
+          </div>
+        </div>
+      </details>
+    </div>
+  `;
+}
+
 function renderRealEstateResults(a) {
   const m = calculateRealEstateMetrics(a);
   const cfClass = m.monthlyCashFlow >= 0 ? "pos" : "neg";
@@ -2660,6 +2828,8 @@ function renderRealEstateResults(a) {
           </div>
         </details>
       </div>
+
+      ${renderSuggestedPriceCard(a)}
 
       ${m.hasOwnerOccupied ? `
         <div class="re-metric re-metric--highlight">
