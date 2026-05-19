@@ -304,9 +304,16 @@ const TRANSLATIONS = {
   re_hint_bad:           { fr: "Cash flow négatif. L'immeuble ne se paie pas tout seul.", es: "Flujo negativo. El inmueble no se paga solo." },
   re_reasons_summary:    { fr: "Pourquoi cette évaluation ?",  es: "¿Por qué esta evaluación?" },
   re_confirm_delete:     { fr: "Supprimer cette analyse?",     es: "¿Eliminar este análisis?" },
+  re_save_need_name:     { fr: "Donne un nom à ton analyse (ex: Triplex St-Jean-Baptiste).", es: "Dale un nombre a tu análisis (ej: Triplex St-Jean-Baptiste)." },
+  re_save_toast:         { fr: "Analyse sauvegardée",          es: "Análisis guardado" },
 
   // ── Prix d'offre suggéré ──────────────────────────
   re_suggested_title:    { fr: "Prix d'offre conseillé",       es: "Precio de oferta sugerido" },
+  re_suggested_strongly_recommended:{ fr: "Achat fortement recommandé", es: "Compra altamente recomendada" },
+  re_suggested_strongly_hint:{ fr: "Le prix demandé ({price}) est déjà au niveau d'un excellent investissement. Tu peux acheter sans hésiter selon ton analyse.", es: "El precio pedido ({price}) ya está al nivel de una excelente inversión." },
+  re_suggested_recommended:{ fr: "Achat conseillé",            es: "Compra recomendada" },
+  re_suggested_recommended_hint:{ fr: "Le prix demandé ({price}) est dans la zone d'un bon investissement. Tu peux acheter, ou pousser la négociation pour atteindre le niveau excellent.", es: "El precio pedido ({price}) está en la zona de buena inversión." },
+  re_suggested_push_excellent:{ fr: "Cible pour excellent",    es: "Meta para excelente" },
   re_suggested_asking:   { fr: "Prix demandé",                 es: "Precio pedido" },
   re_suggested_good_label:{ fr: "Pour un bon investissement",  es: "Para una buena inversión" },
   re_suggested_excellent_label:{ fr: "Pour un excellent investissement", es: "Para una excelente inversión" },

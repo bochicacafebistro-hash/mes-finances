@@ -3887,6 +3887,36 @@ h1, h2, h3, h4 {
   gap: 4px;
 }
 
+/* Toast de confirmation (sauvegarde, etc.) */
+.re-toast {
+  position: fixed;
+  bottom: 24px;
+  left: 50%;
+  transform: translateX(-50%) translateY(20px);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 12px 20px;
+  background: var(--text);
+  color: var(--bg);
+  border-radius: var(--radius-pill);
+  box-shadow: var(--shadow-lg);
+  font-size: var(--fs-sm);
+  font-weight: 600;
+  z-index: 9999;
+  opacity: 0;
+  transition: opacity 0.25s ease, transform 0.25s ease;
+  pointer-events: none;
+}
+.re-toast.is-visible {
+  opacity: 1;
+  transform: translateX(-50%) translateY(0);
+}
+.re-toast--success {
+  background: var(--status-green);
+  color: #fff;
+}
+
 /* Tooltips explicatifs sur les termes financiers */
 .re-tip {
   display: inline-flex;
@@ -4086,6 +4116,30 @@ h1, h2, h3, h4 {
 }
 .re-suggested--infeasible .re-suggested__title {
   color: var(--status-red);
+}
+.re-suggested--recommended {
+  background: var(--status-green-bg);
+  border-color: var(--status-green);
+  border-width: 2px;
+}
+.re-suggested--recommended .re-suggested__title {
+  color: var(--status-green);
+  font-size: var(--fs-md);
+  text-transform: uppercase;
+  letter-spacing: 0.7px;
+}
+.re-suggested--recommended-excellent {
+  background: linear-gradient(135deg, var(--status-green-bg), var(--status-green-bg));
+}
+.re-suggested--recommended-excellent .re-suggested__title {
+  font-size: var(--fs-lg);
+  font-weight: 900;
+}
+.re-suggested--recommended .re-suggested__hint {
+  font-size: var(--fs-sm);
+  color: var(--text);
+  line-height: 1.5;
+  margin-bottom: var(--sp-2);
 }
 .re-suggested__title {
   font-size: var(--fs-xs);

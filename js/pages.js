@@ -2518,11 +2518,11 @@ function renderRealEstateEdit() {
     <div class="serene-hero-header">
       <div>
         <button class="btn-link" onclick="reBackToList()">${t("re_back_to_list")}</button>
-        <h1 class="serene-hero-h1" style="margin:4px 0 0">${a.id ? t("re_update") : t("re_add")}</h1>
+        <h1 class="serene-hero-h1" style="margin:4px 0 0">${a.id ? (esc(a.name) || t("re_add")) : t("re_add")}</h1>
       </div>
       <div style="display:flex;gap:8px;flex-wrap:wrap">
         ${a.id ? `<button class="btn re-btn-danger" onclick="reDelete('${a.id}')">${icon("trash", 14)} ${t("re_delete")}</button>` : ``}
-        <button class="btn btn-primary" onclick="reSave()">${icon("check", 14)} ${a.id ? t("re_update") : t("re_save")}</button>
+        <button class="btn btn-primary" onclick="reSave()">${icon("check", 14)} ${t("re_save")}</button>
       </div>
     </div>
 
@@ -2755,6 +2755,54 @@ function renderSuggestedPriceCard(a) {
     mrb:      t("re_binding_mrb"),
     stress:   t("re_binding_stress")
   };
+  const explainBlock = `
+    <details class="re-suggested__details">
+      <summary class="re-suggested__more">
+        <span>${t("re_suggested_why")}</span>
+        <span class="re-verdict-details__chevron">▾</span>
+      </summary>
+      <div class="re-suggested__explain">
+        <div class="re-suggested__expl-row">
+          <strong>${t("re_suggested_good_label")} (${fmtMoney(goodPrice)})</strong>
+          <div>${t("re_suggested_why_good").replace("{constraint}", bindingLabels[s.goodBinding] || s.goodBinding)}</div>
+        </div>
+        <div class="re-suggested__expl-row">
+          <strong>${t("re_suggested_excellent_label")} (${fmtMoney(excellentPrice)})</strong>
+          <div>${t("re_suggested_why_excellent").replace("{constraint}", bindingLabels[s.excellentBinding] || s.excellentBinding)}</div>
+        </div>
+        <div class="re-suggested__expl-note">${t("re_suggested_note")}</div>
+      </div>
+    </details>
+  `;
+
+  // CAS 1 : Le prix demandé est déjà au niveau "excellent" → achat fortement recommandé
+  if (asking > 0 && asking <= excellentPrice) {
+    return `
+      <div class="re-suggested re-suggested--recommended re-suggested--recommended-excellent">
+        <div class="re-suggested__title">${icon("check-circle", 14)} ${t("re_suggested_strongly_recommended")}</div>
+        <div class="re-suggested__hint">${t("re_suggested_strongly_hint").replace("{price}", fmtMoney(asking))}</div>
+        ${explainBlock}
+      </div>
+    `;
+  }
+
+  // CAS 2 : Le prix demandé est dans la zone "bon" mais pas "excellent" → achat conseillé, peut négocier
+  if (asking > 0 && asking <= goodPrice) {
+    return `
+      <div class="re-suggested re-suggested--recommended">
+        <div class="re-suggested__title">${icon("check-circle", 14)} ${t("re_suggested_recommended")}</div>
+        <div class="re-suggested__hint">${t("re_suggested_recommended_hint").replace("{price}", fmtMoney(asking))}</div>
+        <div class="re-suggested__row re-suggested__row--excellent">
+          <div class="re-suggested__label">${t("re_suggested_push_excellent")}</div>
+          <div class="re-suggested__price re-suggested__price--excellent">${fmtMoney(excellentPrice)}</div>
+          <div class="re-suggested__diff re-suggested__diff--save">−${fmtMoney(Math.abs(diffExcellent))}</div>
+        </div>
+        ${explainBlock}
+      </div>
+    `;
+  }
+
+  // CAS 3 : Le prix demandé est au-dessus du seuil "bon" → on suggère les deux niveaux pour négocier
   return `
     <div class="re-suggested">
       <div class="re-suggested__title">${icon("dollar-sign", 14)} ${t("re_suggested_title")}</div>
@@ -2767,34 +2815,16 @@ function renderSuggestedPriceCard(a) {
       <div class="re-suggested__row re-suggested__row--good">
         <div class="re-suggested__label">${t("re_suggested_good_label")}</div>
         <div class="re-suggested__price re-suggested__price--good">${fmtMoney(goodPrice)}</div>
-        ${asking > 0 ? `<div class="re-suggested__diff ${diffGood >= 0 ? "re-suggested__diff--save" : "re-suggested__diff--over"}">${diffGood >= 0 ? "−" : "+"}${fmtMoney(Math.abs(diffGood))}</div>` : ""}
+        ${asking > 0 ? `<div class="re-suggested__diff re-suggested__diff--save">−${fmtMoney(Math.abs(diffGood))}</div>` : ""}
       </div>
 
       <div class="re-suggested__row re-suggested__row--excellent">
         <div class="re-suggested__label">${t("re_suggested_excellent_label")}</div>
         <div class="re-suggested__price re-suggested__price--excellent">${fmtMoney(excellentPrice)}</div>
-        ${asking > 0 ? `<div class="re-suggested__diff ${diffExcellent >= 0 ? "re-suggested__diff--save" : "re-suggested__diff--over"}">${diffExcellent >= 0 ? "−" : "+"}${fmtMoney(Math.abs(diffExcellent))}</div>` : ""}
+        ${asking > 0 ? `<div class="re-suggested__diff re-suggested__diff--save">−${fmtMoney(Math.abs(diffExcellent))}</div>` : ""}
       </div>
 
-      <details class="re-suggested__details">
-        <summary class="re-suggested__more">
-          <span>${t("re_suggested_why")}</span>
-          <span class="re-verdict-details__chevron">▾</span>
-        </summary>
-        <div class="re-suggested__explain">
-          <div class="re-suggested__expl-row">
-            <strong>${t("re_suggested_good_label")} (${fmtMoney(goodPrice)})</strong>
-            <div>${t("re_suggested_why_good").replace("{constraint}", bindingLabels[s.goodBinding] || s.goodBinding)}</div>
-          </div>
-          <div class="re-suggested__expl-row">
-            <strong>${t("re_suggested_excellent_label")} (${fmtMoney(excellentPrice)})</strong>
-            <div>${t("re_suggested_why_excellent").replace("{constraint}", bindingLabels[s.excellentBinding] || s.excellentBinding)}</div>
-          </div>
-          <div class="re-suggested__expl-note">
-            ${t("re_suggested_note")}
-          </div>
-        </div>
-      </details>
+      ${explainBlock}
     </div>
   `;
 }
@@ -3116,7 +3146,7 @@ function reRemoveUnit(i) {
 async function reSave() {
   if (!reCurrent) return;
   if (!reCurrent.name || !reCurrent.name.trim()) {
-    alert("Donne un nom à ton analyse (ex: Triplex St-Jean-Baptiste).");
+    alert(t("re_save_need_name") || "Donne un nom à ton analyse (ex: Triplex St-Jean-Baptiste).");
     return;
   }
   const now = Date.now();
@@ -3131,7 +3161,26 @@ async function reSave() {
     const ref = await db.collection("realEstateAnalyses").add(payload);
     reCurrent.id = ref.id;
   }
-  reBackToList();
+  // On reste en mode édition : pas de retour à la liste
+  reShowSaveToast();
+  renderPage();
+}
+
+// Affiche un petit toast "Sauvegardé" en bas de l'écran (auto-disparaît)
+function reShowSaveToast() {
+  let toast = document.getElementById("re-save-toast");
+  if (toast) toast.remove();
+  toast = document.createElement("div");
+  toast.id = "re-save-toast";
+  toast.className = "re-toast re-toast--success";
+  toast.innerHTML = `${icon("check", 14)} <span>${t("re_save_toast") || "Analyse sauvegardée"}</span>`;
+  document.body.appendChild(toast);
+  // Forcer un reflow pour activer la transition
+  requestAnimationFrame(() => toast.classList.add("is-visible"));
+  setTimeout(() => {
+    toast.classList.remove("is-visible");
+    setTimeout(() => toast.remove(), 300);
+  }, 2200);
 }
 async function reDelete(id) {
   if (!id) return;
