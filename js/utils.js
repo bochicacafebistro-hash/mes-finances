@@ -29,6 +29,16 @@ function esc(s) {
   return String(s || "").replace(/'/g, "\\'").replace(/"/g, "&quot;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
 }
 
+// Échappement pour les attributs HTML (apostrophes deviennent &#39; pas \')
+function escAttr(s) {
+  return String(s || "")
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;");
+}
+
 function monthStart(year, month) {
   return new Date(year, month, 1).toISOString().slice(0, 10);
 }

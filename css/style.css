@@ -3644,8 +3644,7 @@ h1, h2, h3, h4 {
   border: 1px solid var(--border);
   border-radius: var(--radius-xl);
   padding: var(--sp-4);
-  max-height: calc(100vh - var(--sp-6));
-  overflow-y: auto;
+  /* Pas d'overflow ici, sinon les tooltips sont coupés. La page scroll à la place. */
 }
 
 .re-verdict-big {
@@ -3917,19 +3916,20 @@ h1, h2, h3, h4 {
 .re-tip::after {
   content: attr(data-tip);
   position: absolute;
-  bottom: calc(100% + 8px);
+  bottom: calc(100% + 10px);
   left: 50%;
   transform: translateX(-50%);
   background: var(--text);
   color: var(--bg);
-  padding: 10px 12px;
+  padding: 12px 14px;
   border-radius: var(--radius-md);
-  font-size: 11px;
+  font-size: 13px;
   font-weight: 400;
   white-space: normal;
-  width: 240px;
+  width: 300px;
+  max-width: 90vw;
   z-index: 1000;
-  line-height: 1.45;
+  line-height: 1.5;
   text-align: left;
   pointer-events: none;
   opacity: 0;
@@ -3973,8 +3973,8 @@ h1, h2, h3, h4 {
 
 /* Dropdown "Pourquoi cette évaluation?" */
 .re-reasons {
-  background: var(--surface);
-  border: 1px solid var(--border);
+  background: var(--surface2);
+  border: 2px solid var(--accent);
   border-radius: var(--radius-lg);
   overflow: hidden;
 }
@@ -3984,30 +3984,34 @@ h1, h2, h3, h4 {
   gap: var(--sp-2);
   padding: var(--sp-3) var(--sp-4);
   cursor: pointer;
-  font-weight: 600;
-  font-size: var(--fs-sm);
-  color: var(--text2);
+  font-weight: 700;
+  font-size: var(--fs-md);
+  color: var(--accent);
   user-select: none;
   list-style: none;
   transition: background var(--transition-fast);
 }
-.re-reasons__summary:hover { background: var(--surface2); }
+.re-reasons__summary:hover { background: var(--accent); color: var(--accent-text); }
+.re-reasons__summary:hover::after { color: var(--accent-text); }
 .re-reasons__summary::-webkit-details-marker { display: none; }
 .re-reasons__summary::marker { content: ""; }
 .re-reasons__summary::after {
   content: "▼";
   margin-left: auto;
-  font-size: 9px;
-  color: var(--text3);
-  transition: transform 0.2s ease;
+  font-size: 11px;
+  color: var(--accent);
+  transition: transform 0.2s ease, color var(--transition-fast);
 }
 .re-reasons[open] .re-reasons__summary::after {
   transform: rotate(180deg);
 }
 .re-reasons[open] .re-reasons__summary {
   border-bottom: 1px solid var(--border);
-  background: var(--surface2);
+  background: var(--accent);
+  color: var(--accent-text);
 }
+.re-reasons[open] .re-reasons__summary::after { color: var(--accent-text); }
+.re-reasons[open] .re-reasons__summary svg { color: var(--accent-text); }
 .re-reasons__body {
   padding: var(--sp-3);
   display: flex;

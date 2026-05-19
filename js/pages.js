@@ -561,7 +561,7 @@ function openAccountModal(id) {
         <select id="a-type">${ACCOUNT_TYPES.map(at => `<option value="${at.value}" ${(a?.type || "checking") === at.value ? "selected" : ""}>${tAccountType(at.value)}</option>`).join("")}</select>
       </label>
       <label>${t("acc_field_balance")}
-        <input id="a-balance" type="number" step="0.01" value="${a?.initialBalance ?? 0}"/>
+        <input id="a-balance" type="number" step="any"value="${a?.initialBalance ?? 0}"/>
       </label>
     </div>
     <label>${t("acc_field_color")}
@@ -852,7 +852,7 @@ function renderTxFormContent(tx) {
 
   document.getElementById("tx-form-content").innerHTML = `
     <div class="form-row">
-      <label>${t("tx_field_amount")}<input id="tx-amount" type="number" step="0.01" min="0" value="${tx?.amount ?? ""}" autofocus/></label>
+      <label>${t("tx_field_amount")}<input id="tx-amount" type="number" step="any"min="0" value="${tx?.amount ?? ""}" autofocus/></label>
       <label>${t("tx_field_date")}<input id="tx-date" type="date" value="${tx?.date || today}"/></label>
     </div>
     <label>${isTransfer ? "Du compte" : t("tx_field_account")}
@@ -1480,7 +1480,7 @@ function openBudgetModal(categoryId) {
       </div>
     </div>
     <label>${t("budget_monthly_limit")}
-      <input id="b-limit" type="number" step="0.01" min="0" value="${existing?.monthlyLimit || ""}" placeholder="ex: 500" autofocus/>
+      <input id="b-limit" type="number" step="any"min="0" value="${existing?.monthlyLimit || ""}" placeholder="ex: 500" autofocus/>
     </label>
     <div class="modal-actions">
       <button class="btn-cancel" onclick="closeModal()">${t("cancel")}</button>
@@ -2049,7 +2049,7 @@ function reTip(key) {
   const text = t(key);
   if (!text || text === key) return "";
   // tabindex pour accessibilité + onclick pour mobile (toggle .is-open)
-  return `<span class="re-tip" tabindex="0" data-tip="${esc(text)}" role="button" aria-label="Définition" onclick="this.classList.toggle('is-open');event.stopPropagation()">i</span>`;
+  return `<span class="re-tip" tabindex="0" data-tip="${escAttr(text)}" role="button" aria-label="Définition" onclick="this.classList.toggle('is-open');event.stopPropagation()">i</span>`;
 }
 
 // Décompose le verdict en raisons explicites compréhensibles
@@ -2442,7 +2442,7 @@ function renderRealEstateEdit() {
             </label>
             <label class="re-field">
               <span>${t("re_field_price")}</span>
-              <input type="number" inputmode="numeric" min="0" step="1000" value="${a.purchasePrice || ""}" oninput="reCurrent.purchasePrice=Math.max(0,Number(this.value)||0);reRefreshDownPaymentHint();reRefresh()">
+              <input type="number" inputmode="numeric" min="0" step="any"value="${a.purchasePrice || ""}" oninput="reCurrent.purchasePrice=Math.max(0,Number(this.value)||0);reRefreshDownPaymentHint();reRefresh()">
             </label>
             <div class="re-field">
               <div class="re-field__head">
@@ -2454,13 +2454,13 @@ function renderRealEstateEdit() {
               </div>
               ${a.downPaymentMode === "percent" ? `
                 <div class="re-input-suffix">
-                  <input type="number" inputmode="decimal" min="0" max="100" step="0.5" value="${a.downPaymentPercent ?? ""}" oninput="reCurrent.downPaymentPercent=Math.min(100,Math.max(0,Number(this.value)||0));reRefreshDownPaymentHint();reRefresh()">
+                  <input type="number" inputmode="decimal" min="0" max="100" step="any"value="${a.downPaymentPercent ?? ""}" oninput="reCurrent.downPaymentPercent=Math.min(100,Math.max(0,Number(this.value)||0));reRefreshDownPaymentHint();reRefresh()">
                   <span class="re-input-suffix__symbol">%</span>
                 </div>
               ` : `
                 <div class="re-input-suffix">
                   <span class="re-input-suffix__symbol re-input-suffix__symbol--left">$</span>
-                  <input type="number" inputmode="numeric" min="0" max="${Number(a.purchasePrice) || 99999999}" step="1000" value="${a.downPayment ?? ""}" oninput="reCurrent.downPayment=Math.max(0,Math.min(Number(reCurrent.purchasePrice)||Infinity, Number(this.value)||0));reRefreshDownPaymentHint();reRefresh()">
+                  <input type="number" inputmode="numeric" min="0" max="${Number(a.purchasePrice) || 99999999}" step="any"value="${a.downPayment ?? ""}" oninput="reCurrent.downPayment=Math.max(0,Math.min(Number(reCurrent.purchasePrice)||Infinity, Number(this.value)||0));reRefreshDownPaymentHint();reRefresh()">
                 </div>
               `}
               <small class="re-hint" id="re-downpayment-hint">${reDownPaymentHintText(a)}</small>
@@ -2483,7 +2483,7 @@ function renderRealEstateEdit() {
             </label>
             <label class="re-field">
               <span>${t("re_field_rate")}${reTip("re_tip_interest")}</span>
-              <input type="number" inputmode="decimal" min="0" max="25" step="0.01" value="${a.interestRate || ""}" oninput="reCurrent.interestRate=Math.min(25,Math.max(0,Number(this.value)||0));reRefresh()">
+              <input type="number" inputmode="decimal" min="0" max="25" step="any"value="${a.interestRate || ""}" oninput="reCurrent.interestRate=Math.min(25,Math.max(0,Number(this.value)||0));reRefresh()">
             </label>
             <label class="re-field re-field--wide">
               <span>${t("re_field_payment_freq")}${reTip("re_tip_payment_freq")}</span>
@@ -2501,21 +2501,21 @@ function renderRealEstateEdit() {
           <div class="re-fields">
             <label class="re-field">
               <span>${t("re_field_municipal_tax")}</span>
-              <input type="number" inputmode="numeric" min="0" step="100" value="${a.municipalTax || ""}" oninput="reCurrent.municipalTax=Math.max(0,Number(this.value)||0);reRefresh()">
+              <input type="number" inputmode="numeric" min="0" step="any"value="${a.municipalTax || ""}" oninput="reCurrent.municipalTax=Math.max(0,Number(this.value)||0);reRefresh()">
             </label>
             <label class="re-field">
               <span>${t("re_field_school_tax")}</span>
-              <input type="number" inputmode="numeric" min="0" step="50" value="${a.schoolTax || ""}" oninput="reCurrent.schoolTax=Math.max(0,Number(this.value)||0);reRefresh()">
+              <input type="number" inputmode="numeric" min="0" step="any"value="${a.schoolTax || ""}" oninput="reCurrent.schoolTax=Math.max(0,Number(this.value)||0);reRefresh()">
             </label>
             <label class="re-field">
               <span>${t("re_field_insurance")}</span>
-              <input type="number" inputmode="numeric" min="0" step="50" value="${a.insurance || ""}" oninput="reCurrent.insurance=Math.max(0,Number(this.value)||0);reRefresh()">
+              <input type="number" inputmode="numeric" min="0" step="any"value="${a.insurance || ""}" oninput="reCurrent.insurance=Math.max(0,Number(this.value)||0);reRefresh()">
             </label>
             <label class="re-field">
               <span>${t("re_field_electricity")}</span>
               <div class="re-input-suffix">
                 <span class="re-input-suffix__symbol re-input-suffix__symbol--left">$</span>
-                <input type="number" inputmode="numeric" min="0" step="10" value="${a.electricity || ""}" oninput="reCurrent.electricity=Math.max(0,Number(this.value)||0);reRefresh()">
+                <input type="number" inputmode="numeric" min="0" step="any"value="${a.electricity || ""}" oninput="reCurrent.electricity=Math.max(0,Number(this.value)||0);reRefresh()">
                 <span class="re-input-suffix__symbol">${t("re_metric_per_month")}</span>
               </div>
               <small class="re-hint">${t("re_field_electricity_hint")}</small>
@@ -2526,7 +2526,7 @@ function renderRealEstateEdit() {
               </div>
               <div class="re-input-suffix">
                 <span class="re-input-suffix__symbol re-input-suffix__symbol--left">$</span>
-                <input type="number" inputmode="numeric" min="0" step="10" value="${a.otherServiceAmount || ""}" oninput="reCurrent.otherServiceAmount=Math.max(0,Number(this.value)||0);reRefresh()">
+                <input type="number" inputmode="numeric" min="0" step="any"value="${a.otherServiceAmount || ""}" oninput="reCurrent.otherServiceAmount=Math.max(0,Number(this.value)||0);reRefresh()">
                 <span class="re-input-suffix__symbol">${t("re_metric_per_month")}</span>
               </div>
               <small class="re-hint">${t("re_field_other_service_hint")}</small>
@@ -2534,7 +2534,7 @@ function renderRealEstateEdit() {
             <label class="re-field">
               <span>${t("re_field_maintenance")}${reTip("re_tip_maintenance")}</span>
               <div class="re-input-suffix">
-                <input type="number" inputmode="decimal" min="0" max="50" step="0.5" value="${a.maintenancePercent ?? ""}" oninput="reCurrent.maintenancePercent=Math.min(50,Math.max(0,Number(this.value)||0));reRefresh()">
+                <input type="number" inputmode="decimal" min="0" max="50" step="any"value="${a.maintenancePercent ?? ""}" oninput="reCurrent.maintenancePercent=Math.min(50,Math.max(0,Number(this.value)||0));reRefresh()">
                 <span class="re-input-suffix__symbol">%</span>
               </div>
               <small class="re-hint">${t("re_field_maintenance_hint")}</small>
@@ -2542,7 +2542,7 @@ function renderRealEstateEdit() {
             <label class="re-field">
               <span>${t("re_field_vacancy")}${reTip("re_tip_vacancy")}</span>
               <div class="re-input-suffix">
-                <input type="number" inputmode="decimal" min="0" max="50" step="0.5" value="${a.vacancyPercent ?? ""}" oninput="reCurrent.vacancyPercent=Math.min(50,Math.max(0,Number(this.value)||0));reRefresh()">
+                <input type="number" inputmode="decimal" min="0" max="50" step="any"value="${a.vacancyPercent ?? ""}" oninput="reCurrent.vacancyPercent=Math.min(50,Math.max(0,Number(this.value)||0));reRefresh()">
                 <span class="re-input-suffix__symbol">%</span>
               </div>
               <small class="re-hint">${t("re_field_vacancy_hint")}</small>
@@ -2550,7 +2550,7 @@ function renderRealEstateEdit() {
             <label class="re-field re-field--wide">
               <span>${t("re_field_management")}${reTip("re_tip_management")}</span>
               <div class="re-input-suffix">
-                <input type="number" inputmode="decimal" min="0" max="30" step="0.5" value="${a.managementPercent ?? ""}" oninput="reCurrent.managementPercent=Math.min(30,Math.max(0,Number(this.value)||0));reRefresh()">
+                <input type="number" inputmode="decimal" min="0" max="30" step="any"value="${a.managementPercent ?? ""}" oninput="reCurrent.managementPercent=Math.min(30,Math.max(0,Number(this.value)||0));reRefresh()">
                 <span class="re-input-suffix__symbol">%</span>
               </div>
               <small class="re-hint">${t("re_field_management_hint")}</small>
@@ -2564,7 +2564,7 @@ function renderRealEstateEdit() {
             <label class="re-field">
               <span>${t("re_field_appreciation")}${reTip("re_tip_appreciation")}</span>
               <div class="re-input-suffix">
-                <input type="number" inputmode="decimal" min="-10" max="30" step="0.1" value="${a.appreciationPercent ?? ""}" oninput="reCurrent.appreciationPercent=Math.min(30,Math.max(-10,Number(this.value)||0));reRefresh()">
+                <input type="number" inputmode="decimal" min="-10" max="30" step="any"value="${a.appreciationPercent ?? ""}" oninput="reCurrent.appreciationPercent=Math.min(30,Math.max(-10,Number(this.value)||0));reRefresh()">
                 <span class="re-input-suffix__symbol">% /an</span>
               </div>
               <small class="re-hint">${t("re_field_appreciation_hint")}</small>
@@ -2572,7 +2572,7 @@ function renderRealEstateEdit() {
             <label class="re-field">
               <span>${t("re_field_rent_increase")}${reTip("re_tip_rent_increase")}</span>
               <div class="re-input-suffix">
-                <input type="number" inputmode="decimal" min="-5" max="20" step="0.1" value="${a.rentIncreasePercent ?? ""}" oninput="reCurrent.rentIncreasePercent=Math.min(20,Math.max(-5,Number(this.value)||0));reRefresh()">
+                <input type="number" inputmode="decimal" min="-5" max="20" step="any"value="${a.rentIncreasePercent ?? ""}" oninput="reCurrent.rentIncreasePercent=Math.min(20,Math.max(-5,Number(this.value)||0));reRefresh()">
                 <span class="re-input-suffix__symbol">% /an</span>
               </div>
               <small class="re-hint">${t("re_field_rent_increase_hint")}</small>
@@ -2602,7 +2602,7 @@ function renderRealEstateEdit() {
                     <span>${t("re_unit_rent")}</span>
                     <div class="re-input-suffix">
                       <span class="re-input-suffix__symbol re-input-suffix__symbol--left">$</span>
-                      <input type="number" inputmode="numeric" min="0" max="20000" step="25" value="${u.rent || ""}" oninput="reCurrent.units[${i}].rent=Math.max(0,Number(this.value)||0);reRefresh()">
+                      <input type="number" inputmode="numeric" min="0" max="20000" step="any"value="${u.rent || ""}" oninput="reCurrent.units[${i}].rent=Math.max(0,Number(this.value)||0);reRefresh()">
                       <span class="re-input-suffix__symbol">${t("re_metric_per_month")}</span>
                     </div>
                   </label>
