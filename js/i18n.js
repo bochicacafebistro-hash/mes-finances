@@ -307,6 +307,8 @@ const TRANSLATIONS = {
   re_years:              { fr: "années",                       es: "años" },
   re_years_short:        { fr: "ans",                          es: "años" },
   re_proj_future_value:  { fr: "Valeur de l'immeuble",         es: "Valor del inmueble" },
+  re_proj_initial_price: { fr: "vs prix d'achat {n}",          es: "vs precio inicial {n}" },
+  re_proj_appreciation_gain:{ fr: "Prise de valeur",           es: "Apreciación ganada" },
   re_proj_mortgage_balance:{ fr: "Solde hypothécaire restant", es: "Saldo hipotecario restante" },
   re_proj_paid_down:     { fr: "{n} remboursé",                es: "{n} pagado" },
   re_proj_fully_paid:    { fr: "Hypothèque entièrement payée", es: "Hipoteca totalmente pagada" },
@@ -315,8 +317,13 @@ const TRANSLATIONS = {
   re_proj_cum_rent:      { fr: "Loyers cumulés",               es: "Alquileres acumulados" },
   re_proj_cum_cashflow:  { fr: "Cash flow cumulé",             es: "Flujo acumulado" },
   re_proj_total_profit:  { fr: "Profit total (si vente)",      es: "Beneficio total (si venta)" },
+  re_proj_breakdown_title:{ fr: "Composition du profit",       es: "Composición del beneficio" },
+  re_proj_bd_appreciation:{ fr: "Prise de valeur (appréciation)", es: "Apreciación (plusvalía)" },
+  re_proj_bd_principal:  { fr: "Capital hypothécaire remboursé", es: "Capital hipotecario pagado" },
+  re_proj_bd_cashflow:   { fr: "Cash flow cumulé",             es: "Flujo acumulado" },
+  re_proj_bd_total:      { fr: "Profit total",                 es: "Beneficio total" },
   re_proj_annualized_return:{ fr: "Rendement annualisé",       es: "Rendimiento anualizado" },
-  re_proj_annualized_hint:{ fr: "CAGR : équité finale + cash flow cumulé, comparés à ta mise de fond.", es: "CAGR: capital final + flujo acumulado vs aporte inicial." },
+  re_proj_annualized_hint:{ fr: "CAGR sur ta mise de fond de {dp}. Inclut appréciation + remboursement de capital + cash flow.", es: "CAGR sobre tu aporte de {dp}. Incluye apreciación + capital pagado + flujo." },
 };
 
 let uiLang = localStorage.getItem("finances-ui-lang") || "fr";

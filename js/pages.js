@@ -2035,6 +2035,8 @@ function projectRealEstate(a, years) {
 
   // Valeur future de l'immeuble (composition annuelle)
   const futureValue = price * Math.pow(1 + apprRate, years);
+  // Prise de valeur = gain en $ provenant de l'appréciation seule
+  const appreciationGain = futureValue - price;
 
   // Solde hypothécaire après k paiements mensuels — formule fermée
   // B_k = P*(1+i)^k - PMT*((1+i)^k - 1)/i
@@ -2099,7 +2101,7 @@ function projectRealEstate(a, years) {
 
   return {
     years,
-    futureValue, mortgageBalance, principalPaidDown,
+    futureValue, appreciationGain, mortgageBalance, principalPaidDown,
     equity, equityNetGain,
     cumGrossRent, cumNOI, cumCashFlow,
     totalWealth, totalProfit,
@@ -2473,6 +2475,12 @@ function renderRealEstateProjection(a, years) {
         <div class="re-proj-stat">
           <div class="re-proj-stat__label">${t("re_proj_future_value")}</div>
           <div class="re-proj-stat__value">${fmtMoney(p.futureValue)}</div>
+          <div class="re-proj-stat__sub">${t("re_proj_initial_price").replace("{n}", fmtMoney(a.purchasePrice || 0))}</div>
+        </div>
+        <div class="re-proj-stat re-proj-stat--gain">
+          <div class="re-proj-stat__label">${icon("trending-up", 12)} ${t("re_proj_appreciation_gain")}</div>
+          <div class="re-proj-stat__value re-proj-stat__value--pos">+${fmtMoney(p.appreciationGain)}</div>
+          <div class="re-proj-stat__sub">${(Number(a.appreciationPercent) || 0).toFixed(1)}% /an &times; ${p.years} ${t("re_years_short")}</div>
         </div>
         <div class="re-proj-stat">
           <div class="re-proj-stat__label">${t("re_proj_mortgage_balance")}</div>
@@ -2498,10 +2506,33 @@ function renderRealEstateProjection(a, years) {
         </div>
       </div>
 
+      <div class="re-proj-breakdown">
+        <div class="re-proj-breakdown__title">${t("re_proj_breakdown_title")}</div>
+        <div class="re-proj-breakdown__row">
+          <span class="re-proj-breakdown__icon" style="background:var(--status-green-bg);color:var(--status-green)">${icon("trending-up", 12)}</span>
+          <span class="re-proj-breakdown__label">${t("re_proj_bd_appreciation")}</span>
+          <span class="re-proj-breakdown__val">+${fmtMoney(p.appreciationGain)}</span>
+        </div>
+        <div class="re-proj-breakdown__row">
+          <span class="re-proj-breakdown__icon" style="background:var(--status-blue-bg);color:var(--status-blue)">${icon("shield-check", 12)}</span>
+          <span class="re-proj-breakdown__label">${t("re_proj_bd_principal")}</span>
+          <span class="re-proj-breakdown__val">+${fmtMoney(p.principalPaidDown)}</span>
+        </div>
+        <div class="re-proj-breakdown__row">
+          <span class="re-proj-breakdown__icon" style="background:${p.cumCashFlow >= 0 ? 'var(--status-green-bg)' : 'var(--status-red-bg)'};color:${p.cumCashFlow >= 0 ? 'var(--status-green)' : 'var(--status-red)'}">${icon("dollar-sign", 12)}</span>
+          <span class="re-proj-breakdown__label">${t("re_proj_bd_cashflow")}</span>
+          <span class="re-proj-breakdown__val ${p.cumCashFlow < 0 ? 're-proj-breakdown__val--neg' : ''}">${p.cumCashFlow >= 0 ? '+' : ''}${fmtMoney(p.cumCashFlow)}</span>
+        </div>
+        <div class="re-proj-breakdown__row re-proj-breakdown__row--total">
+          <span class="re-proj-breakdown__label">${t("re_proj_bd_total")}</span>
+          <span class="re-proj-breakdown__val re-proj-breakdown__val--${profitClass}">${p.totalProfit >= 0 ? '+' : ''}${fmtMoney(p.totalProfit)}</span>
+        </div>
+      </div>
+
       <div class="re-proj-return re-proj-return--${returnClass}">
         <div class="re-proj-return__label">${t("re_proj_annualized_return")}</div>
         <div class="re-proj-return__value">${p.annualizedReturn === null ? "—" : p.annualizedReturn.toFixed(2) + "%"}<span class="re-proj-return__suffix">/an</span></div>
-        <div class="re-proj-return__hint">${t("re_proj_annualized_hint")}</div>
+        <div class="re-proj-return__hint">${t("re_proj_annualized_hint").replace("{dp}", fmtMoney(calculateRealEstateMetrics(a).downPayment))}</div>
       </div>
     </div>
   `;
