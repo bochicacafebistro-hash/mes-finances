@@ -4117,6 +4117,23 @@ h1, h2, h3, h4 {
 .re-suggested--infeasible .re-suggested__title {
   color: var(--status-red);
 }
+.re-suggested--incomplete {
+  background: var(--surface2);
+  border: 1px dashed var(--border-strong);
+  border-radius: var(--radius-lg);
+  padding: var(--sp-4);
+  text-align: center;
+}
+.re-suggested--incomplete .re-suggested__title {
+  color: var(--text3);
+  justify-content: center;
+}
+.re-suggested--incomplete .re-suggested__hint {
+  font-size: var(--fs-sm);
+  color: var(--text2);
+  line-height: 1.5;
+  margin-top: var(--sp-2);
+}
 .re-suggested--recommended {
   background: var(--status-green-bg);
   border-color: var(--status-green);

@@ -2271,11 +2271,16 @@ function getVerdictReasons(a, m) {
 // Calcule le prix d'achat maximum qui ferait de cet immeuble un "bon" ou "excellent" investissement
 // en gardant tous les autres paramètres (loyers, charges, taux, mise de fond) identiques.
 function reSuggestedPrice(a) {
-  const grossAnnualRent = (a.units || [])
-    .filter(u => !u.ownerOccupied)
-    .reduce((s, u) => s + (Number(u.rent) || 0), 0) * 12;
-  // Pas applicable si pas de loyers (proprio-occupant pur ou données vides)
-  if (grossAnnualRent <= 0) return null;
+  const rentingUnits = (a.units || []).filter(u => !u.ownerOccupied);
+  const hasOwnerOccupied = (a.units || []).some(u => u.ownerOccupied);
+  const grossAnnualRent = rentingUnits.reduce((s, u) => s + (Number(u.rent) || 0), 0) * 12;
+  // États "pas applicable" : on retourne un objet avec une raison plutôt que null
+  if (rentingUnits.length === 0) {
+    return { incomplete: true, reason: "all_owner_occupied" };
+  }
+  if (grossAnnualRent <= 0) {
+    return { incomplete: true, reason: "no_rent_entered" };
+  }
 
   const vacancyPct = Number(a.vacancyPercent) || 0;
   const maintenancePct = Number(a.maintenancePercent) || 0;
@@ -2734,7 +2739,19 @@ function renderRealEstateEdit() {
 // Carte qui suggère un prix d'offre pour que ce soit un bon/excellent investissement
 function renderSuggestedPriceCard(a) {
   const s = reSuggestedPrice(a);
-  if (!s) return ""; // pas de loyers → carte non pertinente
+  if (!s) return ""; // sécurité — ne devrait pas arriver
+  // État incomplet : tous proprio-occupant, ou pas de loyers entrés
+  if (s.incomplete) {
+    const msgKey = s.reason === "all_owner_occupied"
+      ? "re_suggested_all_owner"
+      : "re_suggested_no_rent";
+    return `
+      <div class="re-suggested re-suggested--incomplete">
+        <div class="re-suggested__title">${icon("dollar-sign", 14)} ${t("re_suggested_title")}</div>
+        <div class="re-suggested__hint">${t(msgKey)}</div>
+      </div>
+    `;
+  }
   // Cas infaisable : charges > loyers, peu importe le prix
   if (s.infeasible) {
     return `

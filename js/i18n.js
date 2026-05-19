@@ -314,6 +314,8 @@ const TRANSLATIONS = {
   re_suggested_recommended:{ fr: "Achat conseillé",            es: "Compra recomendada" },
   re_suggested_recommended_hint:{ fr: "Le prix demandé ({price}) est dans la zone d'un bon investissement. Tu peux acheter, ou pousser la négociation pour atteindre le niveau excellent.", es: "El precio pedido ({price}) está en la zona de buena inversión." },
   re_suggested_push_excellent:{ fr: "Cible pour excellent",    es: "Meta para excelente" },
+  re_suggested_no_rent:  { fr: "Entre au moins un loyer dans la section Unités locatives pour voir le prix d'offre conseillé.", es: "Ingresa al menos un alquiler en Unidades para ver el precio sugerido." },
+  re_suggested_all_owner:{ fr: "Tous les logements sont marqués \"propriétaire-occupant\". Le prix conseillé est calculé à partir des loyers reçus — ajoute au moins un logement loué pour voir la suggestion.", es: "Todas las viviendas son habitadas por el propietario. Marca al menos una como alquilada para ver la sugerencia." },
   re_suggested_asking:   { fr: "Prix demandé",                 es: "Precio pedido" },
   re_suggested_good_label:{ fr: "Pour un bon investissement",  es: "Para una buena inversión" },
   re_suggested_excellent_label:{ fr: "Pour un excellent investissement", es: "Para una excelente inversión" },
