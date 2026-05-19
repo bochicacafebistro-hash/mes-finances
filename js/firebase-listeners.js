@@ -26,3 +26,9 @@ db.collection("subscriptions").onSnapshot(snap => {
   subscriptions = snap.docs.map(d => ({ id: d.id, ...d.data() }));
   if (isLoggedIn) renderPage();
 });
+
+db.collection("realEstateAnalyses").onSnapshot(snap => {
+  realEstateAnalyses = snap.docs.map(d => ({ id: d.id, ...d.data() }))
+    .sort((a, b) => (b.updatedAt || 0) - (a.updatedAt || 0));
+  if (isLoggedIn && activePage === "realestate" && reMode === "list") renderPage();
+});

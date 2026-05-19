@@ -10,6 +10,8 @@ function buildSidebar() {
     { section: t("nav_section_planning") },
     { icon: "trending-up",  label: t("nav_budget"),        page: "budget" },
     { icon: "refresh",      label: t("nav_subscriptions"), page: "subscriptions" },
+    { section: t("nav_section_projects") },
+    { icon: "home",         label: t("nav_realestate"),    page: "realestate" },
     { section: t("nav_section_settings") },
     { icon: "tag",          label: t("nav_categories"),    page: "categories" },
   ];
@@ -87,6 +89,7 @@ function renderPage() {
     accounts:      { label: t("nav_accounts"),      icon: "wallet" },
     budget:        { label: t("nav_budget"),        icon: "trending-up" },
     subscriptions: { label: t("nav_subscriptions"), icon: "refresh" },
+    realestate:    { label: t("nav_realestate"),    icon: "home" },
     categories:    { label: t("nav_categories"),    icon: "tag" }
   };
   const meta = pageMeta[activePage] || { label: activePage, icon: "file-text" };
@@ -99,6 +102,7 @@ function renderPage() {
   else if (activePage === "accounts") pc.innerHTML = renderAccounts();
   else if (activePage === "budget") pc.innerHTML = renderBudgetPage();
   else if (activePage === "subscriptions") pc.innerHTML = renderSubscriptionsPage();
+  else if (activePage === "realestate") pc.innerHTML = renderRealEstatePage();
   else if (activePage === "categories") pc.innerHTML = renderCategoriesPage();
   else pc.innerHTML = `<div class="page"><div class="empty">Page introuvable.</div></div>`;
 

@@ -1861,3 +1861,458 @@ async function unconfirmSubscription(subId) {
   if (!subId) return;
   await db.collection("subscriptions").doc(subId).delete();
 }
+
+// ═══════════════════════════════════════════════════════════════════
+// ACHATS IMMOBILIER — Analyse de rentabilité
+// ═══════════════════════════════════════════════════════════════════
+
+const RE_UNIT_TYPES = [
+  { value: "single",     count: 1, label: "re_unit_single" },
+  { value: "duplex",     count: 2, label: "re_unit_duplex" },
+  { value: "triplex",    count: 3, label: "re_unit_triplex" },
+  { value: "quadruplex", count: 4, label: "re_unit_quadruplex" },
+  { value: "5plex",      count: 5, label: "re_unit_5plex" },
+  { value: "6plex",      count: 6, label: "re_unit_6plex" },
+  { value: "custom",     count: 1, label: "re_unit_custom" }
+];
+
+function reNewAnalysis() {
+  return {
+    id: null,
+    name: "",
+    address: "",
+    purchasePrice: 0,
+    downPayment: 0,
+    amortYears: 25,
+    interestRate: 5.5,
+    paymentFrequency: "monthly",
+    municipalTax: 0,
+    schoolTax: 0,
+    insurance: 0,
+    services: 0,
+    maintenancePercent: 5,
+    vacancyPercent: 3,
+    managementPercent: 0,
+    unitType: "triplex",
+    units: [
+      { name: "Logement 1", rent: 0, utilitiesIncluded: true },
+      { name: "Logement 2", rent: 0, utilitiesIncluded: true },
+      { name: "Logement 3", rent: 0, utilitiesIncluded: true }
+    ],
+    notes: ""
+  };
+}
+
+// Calcul de paiement hypothécaire — méthode canadienne (composition semi-annuelle)
+function canadianMortgagePayment(principal, annualRatePct, years, freq) {
+  if (!principal || principal <= 0 || annualRatePct < 0 || !years || years <= 0) return 0;
+  const r = annualRatePct / 100;
+  // Au Canada, l'intérêt est composé semi-annuellement
+  // Taux effectif par période = (1 + r/2)^(2/n) - 1, où n = nombre de paiements/an
+  const periodsPerYear = (freq === "biweekly_accel") ? 26 : (freq === "weekly_accel") ? 52 : 12;
+  // On calcule TOUJOURS la mensualité standard d'abord
+  const iMonthly = Math.pow(1 + r / 2, 2 / 12) - 1;
+  const nMonthly = years * 12;
+  const monthlyPmt = (iMonthly === 0) ? principal / nMonthly
+                    : principal * iMonthly / (1 - Math.pow(1 + iMonthly, -nMonthly));
+  if (freq === "monthly") return monthlyPmt;
+  if (freq === "biweekly_accel") return monthlyPmt / 2;   // payé 26x/an
+  if (freq === "weekly_accel")   return monthlyPmt / 4;   // payé 52x/an
+  return monthlyPmt;
+}
+
+function calculateRealEstateMetrics(a) {
+  // Loyers
+  const grossMonthlyRent = (a.units || []).reduce((s, u) => s + (Number(u.rent) || 0), 0);
+  const grossAnnualRent = grossMonthlyRent * 12;
+  // Vacance
+  const vacancyLoss = grossAnnualRent * ((Number(a.vacancyPercent) || 0) / 100);
+  const effectiveGrossIncome = grossAnnualRent - vacancyLoss;
+  // Charges opérationnelles annuelles (sans hypothèque)
+  const municipalTax = Number(a.municipalTax) || 0;
+  const schoolTax    = Number(a.schoolTax) || 0;
+  const insurance    = Number(a.insurance) || 0;
+  const servicesY    = (Number(a.services) || 0) * 12;
+  const maintenance  = grossAnnualRent * ((Number(a.maintenancePercent) || 0) / 100);
+  const management   = effectiveGrossIncome * ((Number(a.managementPercent) || 0) / 100);
+  const totalOpex = municipalTax + schoolTax + insurance + servicesY + maintenance + management;
+  // NOI (Net Operating Income) — exclut le service de la dette
+  const noi = effectiveGrossIncome - totalOpex;
+  // Hypothèque
+  const principal = Math.max(0, (Number(a.purchasePrice) || 0) - (Number(a.downPayment) || 0));
+  const monthlyPmt  = canadianMortgagePayment(principal, a.interestRate, a.amortYears, "monthly");
+  const biweeklyPmt = canadianMortgagePayment(principal, a.interestRate, a.amortYears, "biweekly_accel");
+  const weeklyPmt   = canadianMortgagePayment(principal, a.interestRate, a.amortYears, "weekly_accel");
+  // On utilise la mensualité standard pour les ratios (équitable même si on choisit accéléré)
+  const annualMortgageStd = monthlyPmt * 12;
+  const annualCashFlow = noi - annualMortgageStd;
+  const monthlyCashFlow = annualCashFlow / 12;
+  // Cap rate (sur NOI / prix d'achat)
+  const capRate = (a.purchasePrice > 0) ? (noi / a.purchasePrice) * 100 : 0;
+  // MRB (prix / revenu brut annuel)
+  const mrb = (grossAnnualRent > 0) ? (a.purchasePrice / grossAnnualRent) : 0;
+  // Stress test +2%
+  const stressMonthlyPmt = canadianMortgagePayment(principal, (Number(a.interestRate) || 0) + 2, a.amortYears, "monthly");
+  const stressAnnualMortgage = stressMonthlyPmt * 12;
+  const stressAnnualCashFlow = noi - stressAnnualMortgage;
+  const stressMonthlyCashFlow = stressAnnualCashFlow / 12;
+  // Verdict
+  let verdict = "unknown";
+  if (grossAnnualRent > 0 && a.purchasePrice > 0) {
+    if (monthlyCashFlow < 0) verdict = "bad";
+    else if (capRate < 4 || mrb > 12 || stressMonthlyCashFlow < -200) verdict = "risky";
+    else if (capRate >= 6 && mrb <= 8 && stressMonthlyCashFlow >= 0) verdict = "excellent";
+    else verdict = "good";
+  }
+  return {
+    grossMonthlyRent, grossAnnualRent, vacancyLoss, effectiveGrossIncome,
+    municipalTax, schoolTax, insurance, servicesY, maintenance, management, totalOpex,
+    noi, principal, monthlyPmt, biweeklyPmt, weeklyPmt,
+    annualMortgageStd, annualCashFlow, monthlyCashFlow,
+    capRate, mrb,
+    stressMonthlyPmt, stressMonthlyCashFlow,
+    verdict
+  };
+}
+
+function renderRealEstatePage() {
+  if (reMode === "edit" && reCurrent) return renderRealEstateEdit();
+  return renderRealEstateList();
+}
+
+function renderRealEstateList() {
+  let h = `<div class="serene-page">
+    <div class="serene-hero-header">
+      <div>
+        <div class="kicker" style="margin-bottom:10px">${t("re_subtitle").toUpperCase()}</div>
+        <h1 class="serene-hero-h1" style="margin:0">${t("re_title")}</h1>
+      </div>
+      <button class="btn-pill" onclick="reNew()">${icon("plus", 14)} ${t("re_add")}</button>
+    </div>`;
+  if (!realEstateAnalyses.length) {
+    h += `<div class="empty">
+      <div style="margin-bottom:12px;color:var(--text3);display:flex;justify-content:center">${icon("home", 48)}</div>
+      <p>${t("re_empty")}</p>
+    </div></div>`;
+    return h;
+  }
+  h += `<div class="re-list">`;
+  for (const a of realEstateAnalyses) {
+    const m = calculateRealEstateMetrics(a);
+    const cf = m.monthlyCashFlow;
+    const cfClass = cf >= 0 ? "pos" : "neg";
+    h += `<div class="re-card" onclick="reEdit('${a.id}')">
+      <div class="re-card__head">
+        <div class="re-card__icon">${icon("home", 20)}</div>
+        <div class="re-card__title">
+          <div class="re-card__name">${esc(a.name || "(Sans nom)")}</div>
+          <div class="re-card__addr">${esc(a.address || "")}</div>
+        </div>
+        <div class="re-verdict re-verdict--${m.verdict}">${t("re_verdict_" + m.verdict)}</div>
+      </div>
+      <div class="re-card__stats">
+        <div class="re-stat">
+          <div class="re-stat__label">${t("re_metric_cashflow")}</div>
+          <div class="re-stat__value re-stat__value--${cfClass}">${fmtMoney(cf)}<span class="re-stat__suffix">${t("re_metric_per_month")}</span></div>
+        </div>
+        <div class="re-stat">
+          <div class="re-stat__label">${t("re_metric_cap_rate")}</div>
+          <div class="re-stat__value">${m.capRate.toFixed(2)}%</div>
+        </div>
+        <div class="re-stat">
+          <div class="re-stat__label">${t("re_metric_mrb")}</div>
+          <div class="re-stat__value">${m.mrb.toFixed(1)}</div>
+        </div>
+        <div class="re-stat">
+          <div class="re-stat__label">${t("re_field_price")}</div>
+          <div class="re-stat__value">${fmtMoney(a.purchasePrice)}</div>
+        </div>
+      </div>
+    </div>`;
+  }
+  h += `</div></div>`;
+  return h;
+}
+
+function renderRealEstateEdit() {
+  const a = reCurrent;
+  let h = `<div class="serene-page re-page">
+    <div class="serene-hero-header">
+      <div>
+        <button class="btn-link" onclick="reBackToList()">${t("re_back_to_list")}</button>
+        <h1 class="serene-hero-h1" style="margin:4px 0 0">${a.id ? t("re_update") : t("re_add")}</h1>
+      </div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap">
+        ${a.id ? `<button class="btn re-btn-danger" onclick="reDelete('${a.id}')">${icon("trash", 14)} ${t("re_delete")}</button>` : ``}
+        <button class="btn btn-primary" onclick="reSave()">${icon("check", 14)} ${a.id ? t("re_update") : t("re_save")}</button>
+      </div>
+    </div>
+
+    <div class="re-grid">
+      <div class="re-form">
+
+        <section class="re-block">
+          <h3 class="re-block__title">${t("re_section_property")}</h3>
+          <div class="re-fields">
+            <label class="re-field re-field--wide">
+              <span>${t("re_field_name")}</span>
+              <input type="text" placeholder="${t("re_field_name_hint")}" value="${esc(a.name || "")}" oninput="reCurrent.name=this.value">
+            </label>
+            <label class="re-field re-field--wide">
+              <span>${t("re_field_address")}</span>
+              <input type="text" value="${esc(a.address || "")}" oninput="reCurrent.address=this.value">
+            </label>
+            <label class="re-field">
+              <span>${t("re_field_price")}</span>
+              <input type="number" min="0" step="1000" value="${a.purchasePrice || ""}" oninput="reCurrent.purchasePrice=Number(this.value)||0;reRefresh()">
+            </label>
+            <label class="re-field">
+              <span>${t("re_field_downpayment")}</span>
+              <input type="number" min="0" step="1000" value="${a.downPayment || ""}" oninput="reCurrent.downPayment=Number(this.value)||0;reRefresh()">
+            </label>
+            <label class="re-field re-field--wide">
+              <span>${t("re_field_unit_type")}</span>
+              <select onchange="reSetUnitType(this.value)">
+                ${RE_UNIT_TYPES.map(u => `<option value="${u.value}" ${a.unitType === u.value ? "selected" : ""}>${t(u.label)}</option>`).join("")}
+              </select>
+            </label>
+          </div>
+        </section>
+
+        <section class="re-block">
+          <h3 class="re-block__title">${t("re_section_mortgage")}</h3>
+          <div class="re-fields">
+            <label class="re-field">
+              <span>${t("re_field_amort")}</span>
+              <input type="number" min="1" max="40" step="1" value="${a.amortYears || ""}" oninput="reCurrent.amortYears=Number(this.value)||0;reRefresh()">
+            </label>
+            <label class="re-field">
+              <span>${t("re_field_rate")}</span>
+              <input type="number" min="0" max="20" step="0.01" value="${a.interestRate || ""}" oninput="reCurrent.interestRate=Number(this.value)||0;reRefresh()">
+            </label>
+            <label class="re-field re-field--wide">
+              <span>${t("re_field_payment_freq")}</span>
+              <select onchange="reCurrent.paymentFrequency=this.value;reRefresh()">
+                <option value="monthly" ${a.paymentFrequency === "monthly" ? "selected" : ""}>${t("re_freq_monthly")}</option>
+                <option value="biweekly_accel" ${a.paymentFrequency === "biweekly_accel" ? "selected" : ""}>${t("re_freq_biweekly")}</option>
+                <option value="weekly_accel" ${a.paymentFrequency === "weekly_accel" ? "selected" : ""}>${t("re_freq_weekly")}</option>
+              </select>
+            </label>
+          </div>
+        </section>
+
+        <section class="re-block">
+          <h3 class="re-block__title">${t("re_section_charges")}</h3>
+          <div class="re-fields">
+            <label class="re-field">
+              <span>${t("re_field_municipal_tax")}</span>
+              <input type="number" min="0" step="100" value="${a.municipalTax || ""}" oninput="reCurrent.municipalTax=Number(this.value)||0;reRefresh()">
+            </label>
+            <label class="re-field">
+              <span>${t("re_field_school_tax")}</span>
+              <input type="number" min="0" step="50" value="${a.schoolTax || ""}" oninput="reCurrent.schoolTax=Number(this.value)||0;reRefresh()">
+            </label>
+            <label class="re-field">
+              <span>${t("re_field_insurance")}</span>
+              <input type="number" min="0" step="50" value="${a.insurance || ""}" oninput="reCurrent.insurance=Number(this.value)||0;reRefresh()">
+            </label>
+            <label class="re-field">
+              <span>${t("re_field_services")}</span>
+              <input type="number" min="0" step="10" value="${a.services || ""}" oninput="reCurrent.services=Number(this.value)||0;reRefresh()">
+              <small class="re-hint">${t("re_field_services_hint")}</small>
+            </label>
+            <label class="re-field">
+              <span>${t("re_field_maintenance")}</span>
+              <input type="number" min="0" max="50" step="0.5" value="${a.maintenancePercent || ""}" oninput="reCurrent.maintenancePercent=Number(this.value)||0;reRefresh()">
+              <small class="re-hint">${t("re_field_maintenance_hint")}</small>
+            </label>
+            <label class="re-field">
+              <span>${t("re_field_vacancy")}</span>
+              <input type="number" min="0" max="50" step="0.5" value="${a.vacancyPercent ?? ""}" oninput="reCurrent.vacancyPercent=Number(this.value)||0;reRefresh()">
+              <small class="re-hint">${t("re_field_vacancy_hint")}</small>
+            </label>
+            <label class="re-field re-field--wide">
+              <span>${t("re_field_management")}</span>
+              <input type="number" min="0" max="30" step="0.5" value="${a.managementPercent ?? ""}" oninput="reCurrent.managementPercent=Number(this.value)||0;reRefresh()">
+              <small class="re-hint">${t("re_field_management_hint")}</small>
+            </label>
+          </div>
+        </section>
+
+        <section class="re-block">
+          <h3 class="re-block__title">${t("re_section_units")}
+            ${a.unitType === "custom" ? `<button class="btn-link" style="margin-left:auto" onclick="reAddUnit()">${t("re_unit_add")}</button>` : ""}
+          </h3>
+          <div class="re-units">
+            ${a.units.map((u, i) => `
+              <div class="re-unit">
+                <div class="re-unit__label">${t("re_unit_label").replace("{n}", i + 1)}</div>
+                <label class="re-field">
+                  <span>${t("re_unit_rent")}</span>
+                  <input type="number" min="0" step="25" value="${u.rent || ""}" oninput="reCurrent.units[${i}].rent=Number(this.value)||0;reRefresh()">
+                </label>
+                <label class="re-checkbox">
+                  <input type="checkbox" ${u.utilitiesIncluded ? "checked" : ""} onchange="reCurrent.units[${i}].utilitiesIncluded=this.checked">
+                  <span>${t("re_unit_utilities")}</span>
+                </label>
+                ${a.unitType === "custom" && a.units.length > 1 ? `<button class="btn-link btn-link--danger" onclick="reRemoveUnit(${i})">${t("re_unit_remove")}</button>` : ""}
+              </div>
+            `).join("")}
+          </div>
+        </section>
+
+        <section class="re-block">
+          <h3 class="re-block__title">${t("re_notes")}</h3>
+          <textarea class="re-textarea" rows="3" oninput="reCurrent.notes=this.value">${esc(a.notes || "")}</textarea>
+        </section>
+      </div>
+
+      <aside class="re-results" id="re-results">
+        ${renderRealEstateResults(a)}
+      </aside>
+    </div>
+  </div>`;
+  return h;
+}
+
+function renderRealEstateResults(a) {
+  const m = calculateRealEstateMetrics(a);
+  const cfClass = m.monthlyCashFlow >= 0 ? "pos" : "neg";
+  const stressClass = m.stressMonthlyCashFlow >= 0 ? "pos" : "neg";
+  return `
+    <div class="re-results__sticky">
+      <div class="re-verdict-big re-verdict--${m.verdict}">
+        <div class="re-verdict-big__label">${t("re_verdict_" + m.verdict)}</div>
+        <div class="re-verdict-big__hint">${t("re_hint_" + (m.verdict === "unknown" ? "good" : m.verdict))}</div>
+      </div>
+
+      <div class="re-metric">
+        <div class="re-metric__label">${t("re_metric_cashflow")}</div>
+        <div class="re-metric__value re-metric__value--big re-metric__value--${cfClass}">${fmtMoney(m.monthlyCashFlow)}<span class="re-metric__suffix">${t("re_metric_per_month")}</span></div>
+        <div class="re-metric__sub">${fmtMoney(m.annualCashFlow)}${t("re_metric_per_year")}</div>
+      </div>
+
+      <div class="re-metric-row">
+        <div class="re-metric">
+          <div class="re-metric__label">${t("re_metric_cap_rate")}</div>
+          <div class="re-metric__value">${m.capRate.toFixed(2)}%</div>
+        </div>
+        <div class="re-metric">
+          <div class="re-metric__label">${t("re_metric_mrb")}</div>
+          <div class="re-metric__value">${m.mrb.toFixed(1)}</div>
+        </div>
+      </div>
+
+      <div class="re-metric">
+        <div class="re-metric__label">${t("re_metric_mortgage_pmt")}</div>
+        <div class="re-metric__breakdown">
+          <div><span>${t("re_metric_mortgage_monthly")}</span><strong>${fmtMoney(m.monthlyPmt)}</strong></div>
+          <div><span>${t("re_metric_mortgage_biw")}</span><strong>${fmtMoney(m.biweeklyPmt)}</strong></div>
+          <div><span>${t("re_metric_mortgage_wkl")}</span><strong>${fmtMoney(m.weeklyPmt)}</strong></div>
+        </div>
+      </div>
+
+      <div class="re-metric">
+        <div class="re-metric__label">${t("re_metric_gross_rent")}</div>
+        <div class="re-metric__value">${fmtMoney(m.grossMonthlyRent)}<span class="re-metric__suffix">${t("re_metric_per_month")}</span></div>
+        <div class="re-metric__sub">${fmtMoney(m.grossAnnualRent)}${t("re_metric_per_year")}</div>
+      </div>
+
+      <div class="re-metric">
+        <div class="re-metric__label">${t("re_metric_noi")}</div>
+        <div class="re-metric__value">${fmtMoney(m.noi)}${t("re_metric_per_year")}</div>
+      </div>
+
+      <div class="re-metric">
+        <div class="re-metric__label">${t("re_metric_total_exp")}</div>
+        <div class="re-metric__value">${fmtMoney(m.totalOpex)}${t("re_metric_per_year")}</div>
+      </div>
+
+      <div class="re-metric re-metric--stress">
+        <div class="re-metric__label">${t("re_metric_stress")}</div>
+        <div class="re-metric__value re-metric__value--${stressClass}">${fmtMoney(m.stressMonthlyCashFlow)}<span class="re-metric__suffix">${t("re_metric_per_month")}</span></div>
+      </div>
+    </div>
+  `;
+}
+
+// Handlers
+function reNew() {
+  reCurrent = reNewAnalysis();
+  reMode = "edit";
+  renderPage();
+}
+function reEdit(id) {
+  const a = realEstateAnalyses.find(x => x.id === id);
+  if (!a) return;
+  reCurrent = JSON.parse(JSON.stringify(a)); // clone profond pour ne pas muter Firestore en live
+  if (!Array.isArray(reCurrent.units) || !reCurrent.units.length) reCurrent.units = [{ name: "Logement 1", rent: 0, utilitiesIncluded: true }];
+  reMode = "edit";
+  renderPage();
+}
+function reBackToList() {
+  reCurrent = null;
+  reMode = "list";
+  renderPage();
+}
+function reRefresh() {
+  // Met à jour seulement le panneau de résultats, sans recréer les inputs (préserve le focus)
+  const panel = document.getElementById("re-results");
+  if (panel && reCurrent) panel.innerHTML = renderRealEstateResults(reCurrent);
+}
+function reSetUnitType(type) {
+  if (!reCurrent) return;
+  const def = RE_UNIT_TYPES.find(u => u.value === type);
+  reCurrent.unitType = type;
+  if (type !== "custom") {
+    const target = def ? def.count : 1;
+    const cur = reCurrent.units || [];
+    const newUnits = [];
+    for (let i = 0; i < target; i++) {
+      newUnits.push(cur[i] || { name: `Logement ${i + 1}`, rent: 0, utilitiesIncluded: true });
+    }
+    reCurrent.units = newUnits;
+  } else {
+    if (!reCurrent.units || !reCurrent.units.length) {
+      reCurrent.units = [{ name: "Logement 1", rent: 0, utilitiesIncluded: true }];
+    }
+  }
+  renderPage();
+}
+function reAddUnit() {
+  if (!reCurrent) return;
+  const idx = (reCurrent.units || []).length + 1;
+  reCurrent.units.push({ name: `Logement ${idx}`, rent: 0, utilitiesIncluded: true });
+  renderPage();
+}
+function reRemoveUnit(i) {
+  if (!reCurrent || !reCurrent.units || reCurrent.units.length <= 1) return;
+  reCurrent.units.splice(i, 1);
+  renderPage();
+}
+async function reSave() {
+  if (!reCurrent) return;
+  if (!reCurrent.name || !reCurrent.name.trim()) {
+    alert("Donne un nom à ton analyse (ex: Triplex St-Jean-Baptiste).");
+    return;
+  }
+  const now = Date.now();
+  const payload = { ...reCurrent, updatedAt: now };
+  if (!payload.createdAt) payload.createdAt = now;
+  if (reCurrent.id) {
+    const id = reCurrent.id;
+    delete payload.id;
+    await db.collection("realEstateAnalyses").doc(id).set(payload, { merge: true });
+  } else {
+    delete payload.id;
+    const ref = await db.collection("realEstateAnalyses").add(payload);
+    reCurrent.id = ref.id;
+  }
+  reBackToList();
+}
+async function reDelete(id) {
+  if (!id) return;
+  if (!confirm("Supprimer cette analyse?")) return;
+  await db.collection("realEstateAnalyses").doc(id).delete();
+  reBackToList();
+}
