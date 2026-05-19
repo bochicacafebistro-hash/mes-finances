@@ -295,6 +295,28 @@ const TRANSLATIONS = {
   re_hint_good:          { fr: "Cash flow positif, métriques acceptables.", es: "Flujo positivo, métricas aceptables." },
   re_hint_risky:         { fr: "Cap rate bas, MRB élevé ou stress test serré. À analyser de près.", es: "Cap rate bajo o estrés ajustado. Analizar con cuidado." },
   re_hint_bad:           { fr: "Cash flow négatif. L'immeuble ne se paie pas tout seul.", es: "Flujo negativo. El inmueble no se paga solo." },
+
+  // ── Projection long terme ─────────────────────────
+  re_section_projection: { fr: "Projection à long terme",      es: "Proyección a largo plazo" },
+  re_section_projection_results:{ fr: "Projection",            es: "Proyección" },
+  re_field_appreciation: { fr: "Appréciation du prix",         es: "Apreciación del precio" },
+  re_field_appreciation_hint:{ fr: "Hausse annuelle moyenne attendue de la valeur (3% historique au Qc).", es: "Aumento anual promedio esperado (3% histórico)." },
+  re_field_rent_increase:{ fr: "Augmentation des loyers",      es: "Aumento de alquileres" },
+  re_field_rent_increase_hint:{ fr: "Augmentation annuelle moyenne (Régie : 1 à 3%).", es: "Aumento anual promedio (1 a 3%)." },
+  re_field_custom_years: { fr: "Nombre d'années personnalisé", es: "Número de años personalizado" },
+  re_years:              { fr: "années",                       es: "años" },
+  re_years_short:        { fr: "ans",                          es: "años" },
+  re_proj_future_value:  { fr: "Valeur de l'immeuble",         es: "Valor del inmueble" },
+  re_proj_mortgage_balance:{ fr: "Solde hypothécaire restant", es: "Saldo hipotecario restante" },
+  re_proj_paid_down:     { fr: "{n} remboursé",                es: "{n} pagado" },
+  re_proj_fully_paid:    { fr: "Hypothèque entièrement payée", es: "Hipoteca totalmente pagada" },
+  re_proj_equity:        { fr: "Équité accumulée",             es: "Capital acumulado" },
+  re_proj_equity_gain:   { fr: "+{n} vs mise de fond",         es: "+{n} vs aporte inicial" },
+  re_proj_cum_rent:      { fr: "Loyers cumulés",               es: "Alquileres acumulados" },
+  re_proj_cum_cashflow:  { fr: "Cash flow cumulé",             es: "Flujo acumulado" },
+  re_proj_total_profit:  { fr: "Profit total (si vente)",      es: "Beneficio total (si venta)" },
+  re_proj_annualized_return:{ fr: "Rendement annualisé",       es: "Rendimiento anualizado" },
+  re_proj_annualized_hint:{ fr: "CAGR : équité finale + cash flow cumulé, comparés à ta mise de fond.", es: "CAGR: capital final + flujo acumulado vs aporte inicial." },
 };
 
 let uiLang = localStorage.getItem("finances-ui-lang") || "fr";

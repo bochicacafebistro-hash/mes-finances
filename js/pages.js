@@ -1899,6 +1899,9 @@ function reNewAnalysis() {
     maintenancePercent: 5,
     vacancyPercent: 3,
     managementPercent: 0,
+    // Projection à long terme
+    appreciationPercent: 3,    // appréciation annuelle du prix (% / an)
+    rentIncreasePercent: 2.5,  // augmentation annuelle du loyer (% / an)
     unitType: "triplex",
     units: [
       { name: "Logement 1", rent: 0, utilitiesIncluded: true, ownerOccupied: false },
@@ -2019,6 +2022,89 @@ function calculateRealEstateMetrics(a) {
     stressMonthlyPmt, stressMonthlyCashFlow,
     hasOwnerOccupied, ownerOccupiedCount: ownerOccupiedUnits.length, rentingUnitsCount: rentingUnits.length,
     verdict
+  };
+}
+
+// Projection long terme : valeur future, solde hypothécaire, loyers cumulés, rendement annualisé
+function projectRealEstate(a, years) {
+  years = Math.max(1, Math.min(50, Number(years) || 10));
+  const base = calculateRealEstateMetrics(a);
+  const price = Number(a.purchasePrice) || 0;
+  const apprRate = (Number(a.appreciationPercent) || 0) / 100;
+  const rentRate = (Number(a.rentIncreasePercent) || 0) / 100;
+
+  // Valeur future de l'immeuble (composition annuelle)
+  const futureValue = price * Math.pow(1 + apprRate, years);
+
+  // Solde hypothécaire après k paiements mensuels — formule fermée
+  // B_k = P*(1+i)^k - PMT*((1+i)^k - 1)/i
+  const annualR = (Number(a.interestRate) || 0) / 100;
+  const iMonthly = Math.pow(1 + annualR / 2, 2 / 12) - 1;
+  const amortYears = Number(a.amortYears) || 0;
+  const k = Math.min(years, amortYears) * 12;
+  let mortgageBalance;
+  if (years >= amortYears) {
+    mortgageBalance = 0;
+  } else if (iMonthly === 0) {
+    mortgageBalance = Math.max(0, base.principal - base.monthlyPmt * k);
+  } else {
+    mortgageBalance = Math.max(
+      0,
+      base.principal * Math.pow(1 + iMonthly, k)
+      - base.monthlyPmt * (Math.pow(1 + iMonthly, k) - 1) / iMonthly
+    );
+  }
+  const principalPaidDown = Math.max(0, base.principal - mortgageBalance);
+
+  // Année par année : loyers et cash flow avec augmentation annuelle des loyers
+  // Hypothèse : les charges fixes (taxes, assurances, services) suivent le même taux d'augmentation
+  // Le maintenance % et le management % restent constants, donc grandissent avec les loyers naturellement
+  const fixedOpexY1 = base.municipalTax + base.schoolTax + base.insurance + base.servicesY;
+  let cumGrossRent = 0;
+  let cumNOI = 0;
+  let cumCashFlow = 0;
+  for (let y = 1; y <= years; y++) {
+    const g = Math.pow(1 + rentRate, y - 1);
+    const yGrossRent   = base.grossAnnualRent * g;
+    const yVacancyLoss = yGrossRent * ((Number(a.vacancyPercent) || 0) / 100);
+    const yEffIncome   = yGrossRent - yVacancyLoss;
+    const yFixedOpex   = fixedOpexY1 * g;
+    const yMaintenance = yGrossRent * ((Number(a.maintenancePercent) || 0) / 100);
+    const yManagement  = yEffIncome * ((Number(a.managementPercent) || 0) / 100);
+    const yOpex = yFixedOpex + yMaintenance + yManagement;
+    const yNOI  = yEffIncome - yOpex;
+    // L'hypothèque ne s'indexe pas — paiement constant pendant toute l'amortissation
+    const yMortgage = (y <= amortYears) ? base.monthlyPmt * 12 : 0;
+    const yCashFlow = yNOI - yMortgage;
+    cumGrossRent += yGrossRent;
+    cumNOI += yNOI;
+    cumCashFlow += yCashFlow;
+  }
+
+  // Équité finale et rendement annualisé (CAGR)
+  const equity = futureValue - mortgageBalance;
+  const equityNetGain = equity - base.downPayment;
+  // Patrimoine net si on vend tout à la fin : équité + flux de trésorerie cumulés
+  const totalWealth = equity + cumCashFlow;
+  const totalProfit = totalWealth - base.downPayment;
+
+  let annualizedReturn = null;
+  if (base.downPayment > 0 && years > 0) {
+    if (totalWealth > 0) {
+      annualizedReturn = (Math.pow(totalWealth / base.downPayment, 1 / years) - 1) * 100;
+    } else {
+      annualizedReturn = -100; // perte totale (ou plus)
+    }
+  }
+
+  return {
+    years,
+    futureValue, mortgageBalance, principalPaidDown,
+    equity, equityNetGain,
+    cumGrossRent, cumNOI, cumCashFlow,
+    totalWealth, totalProfit,
+    annualizedReturn,
+    fullyPaidOff: years >= amortYears
   };
 }
 
@@ -2219,6 +2305,28 @@ function renderRealEstateEdit() {
         </section>
 
         <section class="re-block">
+          <h3 class="re-block__title">${t("re_section_projection")}</h3>
+          <div class="re-fields">
+            <label class="re-field">
+              <span>${t("re_field_appreciation")}</span>
+              <div class="re-input-suffix">
+                <input type="number" min="-10" max="20" step="0.1" value="${a.appreciationPercent ?? ""}" oninput="reCurrent.appreciationPercent=Number(this.value)||0;reRefresh()">
+                <span class="re-input-suffix__symbol">% /an</span>
+              </div>
+              <small class="re-hint">${t("re_field_appreciation_hint")}</small>
+            </label>
+            <label class="re-field">
+              <span>${t("re_field_rent_increase")}</span>
+              <div class="re-input-suffix">
+                <input type="number" min="-5" max="15" step="0.1" value="${a.rentIncreasePercent ?? ""}" oninput="reCurrent.rentIncreasePercent=Number(this.value)||0;reRefresh()">
+                <span class="re-input-suffix__symbol">% /an</span>
+              </div>
+              <small class="re-hint">${t("re_field_rent_increase_hint")}</small>
+            </label>
+          </div>
+        </section>
+
+        <section class="re-block">
           <h3 class="re-block__title">${t("re_section_units")}
             ${a.unitType === "custom" ? `<button class="btn-link" style="margin-left:auto" onclick="reAddUnit()">${t("re_unit_add")}</button>` : ""}
           </h3>
@@ -2336,8 +2444,73 @@ function renderRealEstateResults(a) {
         <div class="re-metric__label">${t("re_metric_stress")}</div>
         <div class="re-metric__value re-metric__value--${stressClass}">${fmtMoney(m.stressMonthlyCashFlow)}<span class="re-metric__suffix">${t("re_metric_per_month")}</span></div>
       </div>
+
+      <div id="re-projection">${renderRealEstateProjection(a, reProjectionYears)}</div>
     </div>
   `;
+}
+
+function renderRealEstateProjection(a, years) {
+  const p = projectRealEstate(a, years);
+  const profitClass = p.totalProfit >= 0 ? "pos" : "neg";
+  const cumCfClass = p.cumCashFlow >= 0 ? "pos" : "neg";
+  const returnClass = (p.annualizedReturn ?? 0) >= 0 ? "pos" : "neg";
+  const pills = [5, 10, 15, 25];
+  return `
+    <div class="re-projection">
+      <div class="re-projection__head">
+        <div class="re-metric__label" style="margin-bottom:0">${icon("trending-up", 12)} ${t("re_section_projection_results")}</div>
+      </div>
+      <div class="re-projection__years">
+        ${pills.map(y => `<button class="re-toggle__btn ${p.years === y ? "is-active" : ""}" onclick="reSetProjectionYears(${y})">${y} ${t("re_years_short")}</button>`).join("")}
+        <div class="re-projection__custom">
+          <input type="number" min="1" max="50" step="1" value="${p.years}" oninput="reSetProjectionYears(Number(this.value)||10)" aria-label="${t("re_field_custom_years")}">
+          <span class="re-projection__custom-label">${t("re_years")}</span>
+        </div>
+      </div>
+
+      <div class="re-proj-grid">
+        <div class="re-proj-stat">
+          <div class="re-proj-stat__label">${t("re_proj_future_value")}</div>
+          <div class="re-proj-stat__value">${fmtMoney(p.futureValue)}</div>
+        </div>
+        <div class="re-proj-stat">
+          <div class="re-proj-stat__label">${t("re_proj_mortgage_balance")}</div>
+          <div class="re-proj-stat__value">${fmtMoney(p.mortgageBalance)}</div>
+          <div class="re-proj-stat__sub">${p.fullyPaidOff ? t("re_proj_fully_paid") : t("re_proj_paid_down").replace("{n}", fmtMoney(p.principalPaidDown))}</div>
+        </div>
+        <div class="re-proj-stat re-proj-stat--accent">
+          <div class="re-proj-stat__label">${t("re_proj_equity")}</div>
+          <div class="re-proj-stat__value">${fmtMoney(p.equity)}</div>
+          <div class="re-proj-stat__sub">${t("re_proj_equity_gain").replace("{n}", fmtMoney(p.equityNetGain))}</div>
+        </div>
+        <div class="re-proj-stat">
+          <div class="re-proj-stat__label">${t("re_proj_cum_rent")}</div>
+          <div class="re-proj-stat__value">${fmtMoney(p.cumGrossRent)}</div>
+        </div>
+        <div class="re-proj-stat">
+          <div class="re-proj-stat__label">${t("re_proj_cum_cashflow")}</div>
+          <div class="re-proj-stat__value re-proj-stat__value--${cumCfClass}">${fmtMoney(p.cumCashFlow)}</div>
+        </div>
+        <div class="re-proj-stat re-proj-stat--total">
+          <div class="re-proj-stat__label">${t("re_proj_total_profit")}</div>
+          <div class="re-proj-stat__value re-proj-stat__value--${profitClass}">${fmtMoney(p.totalProfit)}</div>
+        </div>
+      </div>
+
+      <div class="re-proj-return re-proj-return--${returnClass}">
+        <div class="re-proj-return__label">${t("re_proj_annualized_return")}</div>
+        <div class="re-proj-return__value">${p.annualizedReturn === null ? "—" : p.annualizedReturn.toFixed(2) + "%"}<span class="re-proj-return__suffix">/an</span></div>
+        <div class="re-proj-return__hint">${t("re_proj_annualized_hint")}</div>
+      </div>
+    </div>
+  `;
+}
+
+function reSetProjectionYears(years) {
+  reProjectionYears = Math.max(1, Math.min(50, Number(years) || 10));
+  const block = document.getElementById("re-projection");
+  if (block && reCurrent) block.innerHTML = renderRealEstateProjection(reCurrent, reProjectionYears);
 }
 
 // Handlers

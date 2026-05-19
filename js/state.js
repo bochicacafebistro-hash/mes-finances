@@ -9,6 +9,7 @@ let realEstateAnalyses = []; // { id, name, address, purchasePrice, downPayment,
 // ── État UI de la page Achats immobilier ──────────────
 let reMode = "list";       // "list" | "edit"
 let reCurrent = null;      // brouillon en cours (objet analyse non sauvegardé)
+let reProjectionYears = 10; // durée affichée dans le bloc Projection (modifiable)
 
 let isLoggedIn = false, isAdmin = false, pinBuffer = "", darkMode = false;
 let activePage = "dashboard";
