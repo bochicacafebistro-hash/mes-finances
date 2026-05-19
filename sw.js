@@ -2,7 +2,7 @@
  * Mes Finances — Service Worker (PWA)
  */
 
-const CACHE_VERSION = 'v1.7.1';
+const CACHE_VERSION = 'v1.7.2';
 const CACHE_NAME = `mes-finances-${CACHE_VERSION}`;
 
 const APP_SHELL = [

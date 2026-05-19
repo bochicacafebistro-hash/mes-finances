@@ -3972,52 +3972,54 @@ h1, h2, h3, h4 {
 }
 
 /* Dropdown "Pourquoi cette évaluation?" */
-.re-reasons {
-  background: var(--surface2);
-  border: 2px solid var(--accent);
-  border-radius: var(--radius-lg);
-  overflow: hidden;
+/* Dropdown intégré dans la carte verdict */
+.re-verdict-details {
+  margin-top: var(--sp-3);
+  padding-top: var(--sp-2);
+  border-top: 1px solid color-mix(in srgb, currentColor 20%, transparent);
 }
-.re-reasons__summary {
+.re-verdict-details__more {
   display: flex;
   align-items: center;
-  gap: var(--sp-2);
-  padding: var(--sp-3) var(--sp-4);
+  justify-content: center;
+  gap: 6px;
+  padding: 4px 0;
   cursor: pointer;
+  font-size: var(--fs-xs);
   font-weight: 700;
-  font-size: var(--fs-md);
-  color: var(--accent);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
   user-select: none;
   list-style: none;
-  transition: background var(--transition-fast);
+  opacity: 0.65;
+  transition: opacity var(--transition-fast);
 }
-.re-reasons__summary:hover { background: var(--accent); color: var(--accent-text); }
-.re-reasons__summary:hover::after { color: var(--accent-text); }
-.re-reasons__summary::-webkit-details-marker { display: none; }
-.re-reasons__summary::marker { content: ""; }
-.re-reasons__summary::after {
-  content: "▼";
-  margin-left: auto;
-  font-size: 11px;
-  color: var(--accent);
-  transition: transform 0.2s ease, color var(--transition-fast);
+.re-verdict-details__more:hover { opacity: 1; }
+.re-verdict-details__more::-webkit-details-marker { display: none; }
+.re-verdict-details__more::marker { content: ""; }
+.re-verdict-details__chevron {
+  font-size: 14px;
+  line-height: 1;
+  transition: transform 0.2s ease;
+  display: inline-block;
 }
-.re-reasons[open] .re-reasons__summary::after {
+.re-verdict-details[open] .re-verdict-details__more { opacity: 1; }
+.re-verdict-details[open] .re-verdict-details__chevron {
   transform: rotate(180deg);
 }
-.re-reasons[open] .re-reasons__summary {
-  border-bottom: 1px solid var(--border);
-  background: var(--accent);
-  color: var(--accent-text);
-}
-.re-reasons[open] .re-reasons__summary::after { color: var(--accent-text); }
-.re-reasons[open] .re-reasons__summary svg { color: var(--accent-text); }
-.re-reasons__body {
-  padding: var(--sp-3);
+.re-verdict-details__body {
+  margin-top: var(--sp-3);
   display: flex;
   flex-direction: column;
   gap: var(--sp-2);
+  text-align: left;
 }
+/* Couleurs du dropdown selon le verdict */
+.re-verdict-big.re-verdict--excellent .re-verdict-details__more { color: var(--status-green); }
+.re-verdict-big.re-verdict--good      .re-verdict-details__more { color: var(--status-blue); }
+.re-verdict-big.re-verdict--risky     .re-verdict-details__more { color: var(--status-yellow); }
+.re-verdict-big.re-verdict--bad       .re-verdict-details__more { color: var(--status-red); }
+.re-verdict-big.re-verdict--unknown   .re-verdict-details__more { color: var(--text3); }
 .re-reason {
   display: flex;
   align-items: flex-start;

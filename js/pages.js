@@ -2642,25 +2642,24 @@ function renderRealEstateResults(a) {
       <div class="re-verdict-big re-verdict--${m.verdict}">
         <div class="re-verdict-big__label">${t("re_verdict_" + m.verdict)}</div>
         <div class="re-verdict-big__hint">${t("re_hint_" + (m.verdict === "unknown" ? "good" : m.verdict))}</div>
-      </div>
-
-      <details class="re-reasons">
-        <summary class="re-reasons__summary">
-          ${icon("info", 14)}
-          <span>${t("re_reasons_summary")}</span>
-        </summary>
-        <div class="re-reasons__body">
-          ${getVerdictReasons(a, m).map(r => `
-            <div class="re-reason re-reason--${r.status}">
-              <div class="re-reason__icon">${r.status === 'pass' ? '✓' : r.status === 'warn' ? '!' : '✗'}</div>
-              <div class="re-reason__body">
-                <div class="re-reason__title">${r.title}</div>
-                <div class="re-reason__detail">${r.detail}</div>
+        <details class="re-verdict-details">
+          <summary class="re-verdict-details__more">
+            <span>${t("re_reasons_summary")}</span>
+            <span class="re-verdict-details__chevron">▾</span>
+          </summary>
+          <div class="re-verdict-details__body">
+            ${getVerdictReasons(a, m).map(r => `
+              <div class="re-reason re-reason--${r.status}">
+                <div class="re-reason__icon">${r.status === 'pass' ? '✓' : r.status === 'warn' ? '!' : '✗'}</div>
+                <div class="re-reason__body">
+                  <div class="re-reason__title">${r.title}</div>
+                  <div class="re-reason__detail">${r.detail}</div>
+                </div>
               </div>
-            </div>
-          `).join("")}
-        </div>
-      </details>
+            `).join("")}
+          </div>
+        </details>
+      </div>
 
       ${m.hasOwnerOccupied ? `
         <div class="re-metric re-metric--highlight">
