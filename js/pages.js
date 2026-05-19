@@ -1901,7 +1901,7 @@ function reNewAnalysis() {
     managementPercent: 0,
     // Projection à long terme
     appreciationPercent: 5,    // appréciation annuelle du prix (% / an) — médiane historique Qc long terme
-    rentIncreasePercent: 2.5,  // augmentation annuelle du loyer (% / an)
+    rentIncreasePercent: 3.1,  // augmentation annuelle du loyer (% / an) — TAL Qc 2026 officiel
     unitType: "triplex",
     units: [
       { name: "Logement 1", rent: 0, utilitiesIncluded: true, ownerOccupied: false },
@@ -1965,7 +1965,14 @@ function calculateRealEstateMetrics(a) {
     ? (Number(a.services) || 0) : 0;
   const servicesMonthly = electricityMo + otherServiceMo + legacyServicesMo;
   const servicesY    = servicesMonthly * 12;
-  const maintenance  = grossAnnualRent * ((Number(a.maintenancePercent) || 0) / 100);
+  // Maintenance : si aucun logement loué, on utilise une réserve basée sur la valeur de l'immeuble
+  // (règle 1%/an du prix d'achat) au lieu d'un % des loyers — sinon la réserve tomberait à zéro
+  // pour un SFH proprio-occupant, ce qui serait irréaliste.
+  const maintenanceFromRent = grossAnnualRent * ((Number(a.maintenancePercent) || 0) / 100);
+  const maintenanceFromValue = (Number(a.purchasePrice) || 0) * 0.01;
+  const maintenance  = (rentingUnits.length === 0)
+    ? maintenanceFromValue
+    : Math.max(maintenanceFromRent, maintenanceFromValue * 0.5); // au minimum 0.5% de la valeur même en location complète
   const management   = effectiveGrossIncome * ((Number(a.managementPercent) || 0) / 100);
   const totalOpex = municipalTax + schoolTax + insurance + servicesY + maintenance + management;
   // NOI (Net Operating Income) — exclut le service de la dette
@@ -1993,6 +2000,16 @@ function calculateRealEstateMetrics(a) {
   const stressAnnualMortgage = stressMonthlyPmt * 12;
   const stressAnnualCashFlow = noi - stressAnnualMortgage;
   const stressMonthlyCashFlow = stressAnnualCashFlow / 12;
+  // DSCR : NOI / service de la dette annuel (≥ 1.20 = solide pour les prêteurs)
+  const dscr = (annualMortgageStd > 0) ? noi / annualMortgageStd : null;
+  // Cash-on-Cash : retour annuel sur la mise de fond effective
+  const cashOnCash = (downPayment > 0) ? (annualCashFlow / downPayment) * 100 : null;
+  // Break-even occupancy : à quel taux d'occupation l'immeuble couvre tout juste ses coûts
+  // ((charges + hypothèque) - frais variables liés aux loyers) / loyers bruts annuels
+  // Simplification : on inclut tout dans le seuil. Sous 85% = confortable, au-dessus = fragile.
+  const breakEvenOccupancy = (grossAnnualRent > 0)
+    ? ((totalOpex + annualMortgageStd) / grossAnnualRent) * 100
+    : null;
   // Verdict — si propriétaire-occupant, l'évaluation est différente (on ne juge pas sur cash flow seul)
   let verdict = "unknown";
   if (hasOwnerOccupied) {
@@ -2004,9 +2021,10 @@ function calculateRealEstateMetrics(a) {
       else verdict = "good";                                     // débours raisonnable
     }
   } else if (grossAnnualRent > 0 && a.purchasePrice > 0) {
-    if (monthlyCashFlow < 0) verdict = "bad";
-    else if (capRate < 4 || mrb > 12 || stressMonthlyCashFlow < -200) verdict = "risky";
-    else if (capRate >= 6 && mrb <= 8 && stressMonthlyCashFlow >= 0) verdict = "excellent";
+    // Seuils ajustés pour le marché québécois urbain (Montréal/Québec) où cap rate 6%+ est rare en 2026
+    if (monthlyCashFlow < -300) verdict = "bad";                            // Tolère un petit déficit si les fondamentaux sont bons
+    else if (capRate < 4 || mrb > 12 || stressMonthlyCashFlow < -300) verdict = "risky";
+    else if (capRate >= 5 && mrb <= 10 && stressMonthlyCashFlow >= 0) verdict = "excellent";  // 5%/10 réaliste Qc
     else verdict = "good";
   }
   return {
@@ -2019,6 +2037,7 @@ function calculateRealEstateMetrics(a) {
     annualMortgageStd, annualCashFlow, monthlyCashFlow,
     costToLiveMonthly,
     capRate, mrb,
+    dscr, cashOnCash, breakEvenOccupancy,
     stressMonthlyPmt, stressMonthlyCashFlow,
     hasOwnerOccupied, ownerOccupiedCount: ownerOccupiedUnits.length, rentingUnitsCount: rentingUnits.length,
     verdict
@@ -2129,6 +2148,81 @@ function getVerdictReasons(a, m) {
         status: "fail",
         title: `Prix élevé par rapport aux loyers (MRB ${m.mrb.toFixed(1)})`,
         detail: `L'immeuble coûte ${m.mrb.toFixed(1)} × les revenus locatifs annuels — c'est plus de 12 ×, donc cher. Tu paries fortement sur l'appréciation future plutôt que sur les revenus locatifs.`
+      });
+    }
+  }
+
+  // --- DSCR (capacité de l'immeuble à payer son hypothèque) ---
+  if (m.dscr !== null && m.principal > 0 && m.grossAnnualRent > 0) {
+    if (m.dscr >= 1.20) {
+      reasons.push({
+        status: "pass",
+        title: `L'immeuble se finance bien (DSCR ${m.dscr.toFixed(2)})`,
+        detail: `Le revenu net d'opération couvre ${m.dscr.toFixed(2)}× le paiement de l'hypothèque. C'est confortable — les prêteurs commerciaux exigent généralement au moins 1.20.`
+      });
+    } else if (m.dscr >= 1.0) {
+      reasons.push({
+        status: "warn",
+        title: `L'immeuble paie tout juste sa dette (DSCR ${m.dscr.toFixed(2)})`,
+        detail: `Le revenu net d'opération couvre seulement ${m.dscr.toFixed(2)}× le paiement de l'hypothèque. Marge mince — peu de coussin pour les imprévus.`
+      });
+    } else {
+      reasons.push({
+        status: "fail",
+        title: `L'immeuble ne se finance pas (DSCR ${m.dscr.toFixed(2)})`,
+        detail: `Les loyers nets des charges ne suffisent même pas à payer l'hypothèque. Il manque ${fmtMoney((m.annualMortgageStd - m.noi) / 12)} par mois que tu dois compenser de ta poche.`
+      });
+    }
+  }
+
+  // --- Cash-on-Cash (rendement immédiat sur la mise de fond) ---
+  if (m.cashOnCash !== null && m.grossAnnualRent > 0 && !ownerOccupied) {
+    if (m.cashOnCash >= 8) {
+      reasons.push({
+        status: "pass",
+        title: `Excellent retour sur ta mise de fond (Cash-on-Cash ${m.cashOnCash.toFixed(1)}%)`,
+        detail: `Chaque année, l'immeuble te retourne ${m.cashOnCash.toFixed(1)}% de ta mise de fond en cash flow. C'est au-dessus de 8%, ce qui est très bon (mieux qu'un placement en bourse moyen).`
+      });
+    } else if (m.cashOnCash >= 4) {
+      reasons.push({
+        status: "pass",
+        title: `Retour acceptable sur ta mise de fond (Cash-on-Cash ${m.cashOnCash.toFixed(1)}%)`,
+        detail: `Chaque année, l'immeuble te retourne ${m.cashOnCash.toFixed(1)}% de ta mise de fond en cash flow (avant l'appréciation). C'est dans la fourchette normale (4-8%).`
+      });
+    } else if (m.cashOnCash >= 0) {
+      reasons.push({
+        status: "warn",
+        title: `Retour faible sur ta mise de fond (Cash-on-Cash ${m.cashOnCash.toFixed(1)}%)`,
+        detail: `Chaque année, l'immeuble te retourne seulement ${m.cashOnCash.toFixed(1)}% de ta mise de fond en cash flow. Tu paries surtout sur l'appréciation pour générer du rendement.`
+      });
+    } else {
+      reasons.push({
+        status: "fail",
+        title: `Retour négatif sur ta mise de fond (Cash-on-Cash ${m.cashOnCash.toFixed(1)}%)`,
+        detail: `Tu sors plus d'argent que tu n'en encaisses chaque année. L'investissement n'est rentable que si l'appréciation compense largement.`
+      });
+    }
+  }
+
+  // --- Break-even occupancy (à quel point l'immeuble est résistant aux logements vides) ---
+  if (m.breakEvenOccupancy !== null && m.grossAnnualRent > 0) {
+    if (m.breakEvenOccupancy < 85) {
+      reasons.push({
+        status: "pass",
+        title: `Marge confortable aux vacances (équilibre à ${m.breakEvenOccupancy.toFixed(0)}% d'occupation)`,
+        detail: `Tu peux te permettre d'avoir jusqu'à ${(100 - m.breakEvenOccupancy).toFixed(0)}% de tes loyers en vacance avant de perdre de l'argent. Bonne marge de sécurité.`
+      });
+    } else if (m.breakEvenOccupancy <= 95) {
+      reasons.push({
+        status: "warn",
+        title: `Marge mince aux vacances (équilibre à ${m.breakEvenOccupancy.toFixed(0)}% d'occupation)`,
+        detail: `Tu dois conserver au moins ${m.breakEvenOccupancy.toFixed(0)}% de tes loyers chaque mois pour ne pas perdre d'argent. Un seul logement vide longtemps peut faire mal.`
+      });
+    } else {
+      reasons.push({
+        status: "fail",
+        title: `Très fragile aux vacances (équilibre à ${m.breakEvenOccupancy.toFixed(0)}% d'occupation)`,
+        detail: `Il faut que ${m.breakEvenOccupancy.toFixed(0)}% des loyers rentrent chaque mois pour couvrir les frais. La moindre vacance prolongée te met dans le rouge.`
       });
     }
   }
@@ -2297,7 +2391,7 @@ function renderRealEstateList() {
         </div>
         <div class="re-stat">
           <div class="re-stat__label">${t("re_metric_mrb")}</div>
-          <div class="re-stat__value">${m.mrb.toFixed(1)}</div>
+          <div class="re-stat__value">${m.grossAnnualRent > 0 ? m.mrb.toFixed(1) : "—"}</div>
         </div>
         <div class="re-stat">
           <div class="re-stat__label">${t("re_field_price")}</div>
@@ -2572,8 +2666,25 @@ function renderRealEstateResults(a) {
         </div>
         <div class="re-metric">
           <div class="re-metric__label">${t("re_metric_mrb")}</div>
-          <div class="re-metric__value">${m.mrb.toFixed(1)}</div>
+          <div class="re-metric__value">${m.grossAnnualRent > 0 ? m.mrb.toFixed(1) : "—"}</div>
         </div>
+      </div>
+
+      <div class="re-metric-row">
+        <div class="re-metric" title="${t("re_metric_dscr_hint")}">
+          <div class="re-metric__label">${t("re_metric_dscr")}</div>
+          <div class="re-metric__value ${m.dscr !== null && m.dscr < 1 ? "re-metric__value--neg" : (m.dscr !== null && m.dscr >= 1.2 ? "re-metric__value--pos" : "")}">${m.dscr === null ? "—" : m.dscr.toFixed(2)}</div>
+        </div>
+        <div class="re-metric" title="${t("re_metric_coc_hint")}">
+          <div class="re-metric__label">${t("re_metric_coc")}</div>
+          <div class="re-metric__value ${m.cashOnCash !== null && m.cashOnCash < 0 ? "re-metric__value--neg" : (m.cashOnCash !== null && m.cashOnCash >= 5 ? "re-metric__value--pos" : "")}">${m.cashOnCash === null ? "—" : m.cashOnCash.toFixed(2) + "%"}</div>
+        </div>
+      </div>
+
+      <div class="re-metric" title="${t("re_metric_breakeven_hint")}">
+        <div class="re-metric__label">${t("re_metric_breakeven")}</div>
+        <div class="re-metric__value ${m.breakEvenOccupancy !== null && m.breakEvenOccupancy > 95 ? "re-metric__value--neg" : (m.breakEvenOccupancy !== null && m.breakEvenOccupancy < 85 ? "re-metric__value--pos" : "")}">${m.breakEvenOccupancy === null ? "—" : m.breakEvenOccupancy.toFixed(1) + "%"}</div>
+        <div class="re-metric__sub">${t("re_metric_breakeven_sub")}</div>
       </div>
 
       <div class="re-metric">
@@ -2791,12 +2902,12 @@ function reSetUnitType(type) {
     const cur = reCurrent.units || [];
     const newUnits = [];
     for (let i = 0; i < target; i++) {
-      newUnits.push(cur[i] || { name: `Logement ${i + 1}`, rent: 0, utilitiesIncluded: true });
+      newUnits.push(cur[i] || { name: `Logement ${i + 1}`, rent: 0, utilitiesIncluded: true, ownerOccupied: false });
     }
     reCurrent.units = newUnits;
   } else {
     if (!reCurrent.units || !reCurrent.units.length) {
-      reCurrent.units = [{ name: "Logement 1", rent: 0, utilitiesIncluded: true }];
+      reCurrent.units = [{ name: "Logement 1", rent: 0, utilitiesIncluded: true, ownerOccupied: false }];
     }
   }
   renderPage();
@@ -2804,7 +2915,7 @@ function reSetUnitType(type) {
 function reAddUnit() {
   if (!reCurrent) return;
   const idx = (reCurrent.units || []).length + 1;
-  reCurrent.units.push({ name: `Logement ${idx}`, rent: 0, utilitiesIncluded: true });
+  reCurrent.units.push({ name: `Logement ${idx}`, rent: 0, utilitiesIncluded: true, ownerOccupied: false });
   renderPage();
 }
 function reRemoveUnit(i) {
@@ -2834,7 +2945,7 @@ async function reSave() {
 }
 async function reDelete(id) {
   if (!id) return;
-  if (!confirm("Supprimer cette analyse?")) return;
+  if (!confirm(t("re_confirm_delete"))) return;
   await db.collection("realEstateAnalyses").doc(id).delete();
   reBackToList();
 }

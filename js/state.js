@@ -4,7 +4,18 @@ let transactions = [];
 let categories = [];
 let budgets = [];          // { id, categoryId, monthlyLimit }
 let subscriptions = [];    // { id, key, name, amount, frequency, lastDate, accountId, categoryId, active }
-let realEstateAnalyses = []; // { id, name, address, purchasePrice, downPayment, amortYears, interestRate, paymentFrequency, municipalTax, schoolTax, insurance, services, maintenancePercent, vacancyPercent, managementPercent, unitType, units:[{name,rent,utilitiesIncluded}], notes, createdAt, updatedAt }
+let realEstateAnalyses = []; // {
+//   id, name, address,
+//   purchasePrice, downPaymentMode ("amount"|"percent"), downPayment, downPaymentPercent,
+//   amortYears, interestRate, paymentFrequency ("monthly"|"biweekly_accel"|"weekly_accel"),
+//   municipalTax, schoolTax, insurance,
+//   electricity, otherServiceName, otherServiceAmount,
+//   maintenancePercent, vacancyPercent, managementPercent,
+//   appreciationPercent, rentIncreasePercent,
+//   unitType ("single"|"duplex"|"triplex"|"quadruplex"|"5plex"|"6plex"|"custom"),
+//   units: [{ name, rent, utilitiesIncluded, ownerOccupied }],
+//   notes, createdAt, updatedAt
+// }
 
 // ── État UI de la page Achats immobilier ──────────────
 let reMode = "list";       // "list" | "edit"
