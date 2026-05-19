@@ -295,12 +295,13 @@ const TRANSLATIONS = {
   re_hint_good:          { fr: "Cash flow positif, métriques acceptables.", es: "Flujo positivo, métricas aceptables." },
   re_hint_risky:         { fr: "Cap rate bas, MRB élevé ou stress test serré. À analyser de près.", es: "Cap rate bajo o estrés ajustado. Analizar con cuidado." },
   re_hint_bad:           { fr: "Cash flow négatif. L'immeuble ne se paie pas tout seul.", es: "Flujo negativo. El inmueble no se paga solo." },
+  re_reasons_summary:    { fr: "Pourquoi cette évaluation ?",  es: "¿Por qué esta evaluación?" },
 
   // ── Projection long terme ─────────────────────────
   re_section_projection: { fr: "Projection à long terme",      es: "Proyección a largo plazo" },
   re_section_projection_results:{ fr: "Projection",            es: "Proyección" },
   re_field_appreciation: { fr: "Appréciation du prix",         es: "Apreciación del precio" },
-  re_field_appreciation_hint:{ fr: "Hausse annuelle moyenne attendue de la valeur (3% historique au Qc).", es: "Aumento anual promedio esperado (3% histórico)." },
+  re_field_appreciation_hint:{ fr: "Hausse annuelle moyenne. Qc long terme : 4-5% (source APCIQ/Teranet). 10 dernières années : 7-8%. Boom 2020-22 : ~10%.", es: "Aumento anual promedio. Quebec largo plazo: 4-5%. Última década: 7-8%." },
   re_field_rent_increase:{ fr: "Augmentation des loyers",      es: "Aumento de alquileres" },
   re_field_rent_increase_hint:{ fr: "Augmentation annuelle moyenne (Régie : 1 à 3%).", es: "Aumento anual promedio (1 a 3%)." },
   re_field_custom_years: { fr: "Nombre d'années personnalisé", es: "Número de años personalizado" },

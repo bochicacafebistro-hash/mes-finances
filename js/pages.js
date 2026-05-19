@@ -1900,7 +1900,7 @@ function reNewAnalysis() {
     vacancyPercent: 3,
     managementPercent: 0,
     // Projection à long terme
-    appreciationPercent: 3,    // appréciation annuelle du prix (% / an)
+    appreciationPercent: 5,    // appréciation annuelle du prix (% / an) — médiane historique Qc long terme
     rentIncreasePercent: 2.5,  // augmentation annuelle du loyer (% / an)
     unitType: "triplex",
     units: [
@@ -2023,6 +2023,147 @@ function calculateRealEstateMetrics(a) {
     hasOwnerOccupied, ownerOccupiedCount: ownerOccupiedUnits.length, rentingUnitsCount: rentingUnits.length,
     verdict
   };
+}
+
+// Décompose le verdict en raisons explicites compréhensibles
+function getVerdictReasons(a, m) {
+  if (m.verdict === "unknown") {
+    return [{
+      status: "warn",
+      title: "Données insuffisantes",
+      detail: "Entre au moins le prix d'achat et au moins un loyer (ou marque ton logement comme occupé par le propriétaire) pour voir l'évaluation détaillée."
+    }];
+  }
+  const reasons = [];
+  const ownerOccupied = m.hasOwnerOccupied;
+
+  // --- Cash flow ou coût pour habiter ---
+  if (ownerOccupied) {
+    const cost = m.costToLiveMonthly;
+    if (cost <= 0) {
+      reasons.push({
+        status: "pass",
+        title: `Tu encaisses ${fmtMoney(Math.abs(cost))} /mois en habitant`,
+        detail: `Les loyers des autres locataires couvrent toutes les dépenses + l'hypothèque, et il te reste ${fmtMoney(Math.abs(cost))} dans tes poches chaque mois — en plus de te loger gratuitement. C'est la situation idéale.`
+      });
+    } else if (cost <= 500) {
+      reasons.push({
+        status: "pass",
+        title: `Coût raisonnable pour habiter (${fmtMoney(cost)} /mois)`,
+        detail: `Tu paies ${fmtMoney(cost)} par mois pour habiter ton logement, mais tu construis de l'équité sur l'immeuble entier. Probablement bien moins qu'un loyer pour un logement comparable dans le marché.`
+      });
+    } else if (cost <= 1500) {
+      reasons.push({
+        status: "warn",
+        title: `Coût notable pour habiter (${fmtMoney(cost)} /mois)`,
+        detail: `${fmtMoney(cost)} sortent de ta poche chaque mois pour t'habiter. Compare avec ce qu'un loyer équivalent te coûterait — selon le quartier, ça peut être plus économique de louer.`
+      });
+    } else {
+      reasons.push({
+        status: "fail",
+        title: `Coût élevé pour habiter (${fmtMoney(cost)} /mois)`,
+        detail: `${fmtMoney(cost)} /mois sortent de ta poche juste pour t'habiter. Tu finances l'immeuble plus que les locataires. Risqué si tu perds ton emploi ou si les taux montent.`
+      });
+    }
+  } else {
+    if (m.monthlyCashFlow >= 0) {
+      reasons.push({
+        status: "pass",
+        title: `Cash flow positif (+${fmtMoney(m.monthlyCashFlow)} /mois)`,
+        detail: `Après avoir payé taxes, assurances, services, entretien et l'hypothèque, il te reste ${fmtMoney(m.monthlyCashFlow)} chaque mois. L'immeuble se finance tout seul et te génère un revenu passif.`
+      });
+    } else {
+      reasons.push({
+        status: "fail",
+        title: `Cash flow négatif (${fmtMoney(m.monthlyCashFlow)} /mois)`,
+        detail: `Les loyers ne couvrent pas les dépenses totales — il te manque ${fmtMoney(Math.abs(m.monthlyCashFlow))} par mois que tu dois sortir de tes poches. Tu peux quand même gagner long terme grâce à l'appréciation et au remboursement de capital, mais c'est un investissement qui coûte de l'argent à court terme.`
+      });
+    }
+  }
+
+  // --- Cap rate (taux de capitalisation) ---
+  if (m.grossAnnualRent > 0) {
+    if (m.capRate >= 6) {
+      reasons.push({
+        status: "pass",
+        title: `Excellent rendement (cap rate ${m.capRate.toFixed(2)}%)`,
+        detail: `Pour chaque 100 $ que tu paies pour l'immeuble, il génère ${m.capRate.toFixed(2)} $ de revenu net annuel avant l'hypothèque. C'est au-dessus de la norme québécoise de 4-6 % — bonne affaire.`
+      });
+    } else if (m.capRate >= 4) {
+      reasons.push({
+        status: "pass",
+        title: `Rendement acceptable (cap rate ${m.capRate.toFixed(2)}%)`,
+        detail: `Pour chaque 100 $ payés, l'immeuble génère ${m.capRate.toFixed(2)} $ de revenu net annuel. C'est dans la norme québécoise (4-6 %) — correct sans être exceptionnel.`
+      });
+    } else if (m.capRate > 0) {
+      reasons.push({
+        status: "warn",
+        title: `Rendement faible (cap rate ${m.capRate.toFixed(2)}%)`,
+        detail: `Pour chaque 100 $ payés, l'immeuble génère seulement ${m.capRate.toFixed(2)} $ par année — sous le seuil de 4 % considéré comme minimum. Soit le prix est trop élevé, soit les loyers sont sous-évalués.`
+      });
+    } else {
+      reasons.push({
+        status: "fail",
+        title: `Rendement opérationnel négatif`,
+        detail: `Les charges opérationnelles (hors hypothèque) dépassent les loyers — l'immeuble perd de l'argent avant même de payer l'hypothèque. Vérifie tes chiffres.`
+      });
+    }
+  }
+
+  // --- MRB (multiplicateur de revenu brut) ---
+  if (m.grossAnnualRent > 0) {
+    if (m.mrb <= 8) {
+      reasons.push({
+        status: "pass",
+        title: `Prix raisonnable par rapport aux loyers (MRB ${m.mrb.toFixed(1)})`,
+        detail: `L'immeuble coûte ${m.mrb.toFixed(1)} × les revenus locatifs annuels. Plus le chiffre est bas, mieux c'est — sous 8, c'est généralement une bonne affaire au Québec.`
+      });
+    } else if (m.mrb <= 12) {
+      reasons.push({
+        status: "warn",
+        title: `Prix moyen par rapport aux loyers (MRB ${m.mrb.toFixed(1)})`,
+        detail: `L'immeuble coûte ${m.mrb.toFixed(1)} × les revenus locatifs annuels. Acceptable dans des marchés urbains tendus comme Montréal ou Québec, mais sans aubaine. Le retour par les loyers seuls est lent.`
+      });
+    } else {
+      reasons.push({
+        status: "fail",
+        title: `Prix élevé par rapport aux loyers (MRB ${m.mrb.toFixed(1)})`,
+        detail: `L'immeuble coûte ${m.mrb.toFixed(1)} × les revenus locatifs annuels — c'est plus de 12 ×, donc cher. Tu paries fortement sur l'appréciation future plutôt que sur les revenus locatifs.`
+      });
+    }
+  }
+
+  // --- Stress test (+2 % de taux) ---
+  if (a.purchasePrice > 0 && m.principal > 0) {
+    const stress = m.stressMonthlyCashFlow;
+    if (stress >= 0) {
+      reasons.push({
+        status: "pass",
+        title: `Résistant à une hausse de taux (+${fmtMoney(stress)} /mois avec taux +2 %)`,
+        detail: `Si le taux hypothécaire montait de 2 % au renouvellement (ex: passer de 5,5 % à 7,5 %), tu resterais en équilibre ou positif. Bonne marge de sécurité.`
+      });
+    } else if (stress >= -200 || (ownerOccupied && stress >= -500)) {
+      reasons.push({
+        status: "warn",
+        title: `Stress test gérable (${fmtMoney(stress)} /mois avec taux +2 %)`,
+        detail: `Une hausse de 2 % du taux te coûterait ${fmtMoney(Math.abs(stress))} de plus par mois. C'est gérable mais à surveiller au renouvellement hypothécaire (typiquement 5 ans).`
+      });
+    } else if (ownerOccupied && stress >= -1500) {
+      reasons.push({
+        status: "warn",
+        title: `Stress test serré (${fmtMoney(stress)} /mois avec taux +2 %)`,
+        detail: `Une hausse de 2 % du taux te coûterait ${fmtMoney(Math.abs(stress))} additionnels par mois — assure-toi d'avoir un coussin financier solide avant le renouvellement.`
+      });
+    } else {
+      reasons.push({
+        status: "fail",
+        title: `Stress test dangereux (${fmtMoney(stress)} /mois avec taux +2 %)`,
+        detail: `Si les taux montaient de 2 %, il te faudrait sortir ${fmtMoney(Math.abs(stress))} de plus par mois. Très risqué — si les taux remontent au renouvellement, tu pourrais être forcé de vendre.`
+      });
+    }
+  }
+
+  return reasons;
 }
 
 // Projection long terme : valeur future, solde hypothécaire, loyers cumulés, rendement annualisé
@@ -2392,6 +2533,24 @@ function renderRealEstateResults(a) {
         <div class="re-verdict-big__hint">${t("re_hint_" + (m.verdict === "unknown" ? "good" : m.verdict))}</div>
       </div>
 
+      <details class="re-reasons">
+        <summary class="re-reasons__summary">
+          ${icon("info", 14)}
+          <span>${t("re_reasons_summary")}</span>
+        </summary>
+        <div class="re-reasons__body">
+          ${getVerdictReasons(a, m).map(r => `
+            <div class="re-reason re-reason--${r.status}">
+              <div class="re-reason__icon">${r.status === 'pass' ? '✓' : r.status === 'warn' ? '!' : '✗'}</div>
+              <div class="re-reason__body">
+                <div class="re-reason__title">${r.title}</div>
+                <div class="re-reason__detail">${r.detail}</div>
+              </div>
+            </div>
+          `).join("")}
+        </div>
+      </details>
+
       ${m.hasOwnerOccupied ? `
         <div class="re-metric re-metric--highlight">
           <div class="re-metric__label">${icon("home", 12)} ${t("re_metric_cost_to_live")}</div>
@@ -2554,7 +2713,26 @@ function reEdit(id) {
   const a = realEstateAnalyses.find(x => x.id === id);
   if (!a) return;
   reCurrent = JSON.parse(JSON.stringify(a)); // clone profond pour ne pas muter Firestore en live
-  if (!Array.isArray(reCurrent.units) || !reCurrent.units.length) reCurrent.units = [{ name: "Logement 1", rent: 0, utilitiesIncluded: true }];
+  // Migration douce : appliquer les valeurs par défaut pour les champs ajoutés après la sauvegarde initiale
+  const defaults = reNewAnalysis();
+  for (const key of Object.keys(defaults)) {
+    if (reCurrent[key] === undefined || reCurrent[key] === null) {
+      reCurrent[key] = defaults[key];
+    }
+  }
+  // Migration du champ legacy "services" → électricité (compatibilité)
+  if (reCurrent.services !== undefined && reCurrent.electricity === undefined) {
+    reCurrent.electricity = reCurrent.services;
+    delete reCurrent.services;
+  }
+  // Assurer que chaque unité a les nouveaux champs
+  reCurrent.units = (reCurrent.units || []).map(u => ({
+    name: u.name || "Logement",
+    rent: Number(u.rent) || 0,
+    utilitiesIncluded: u.utilitiesIncluded !== undefined ? !!u.utilitiesIncluded : true,
+    ownerOccupied: !!u.ownerOccupied
+  }));
+  if (!reCurrent.units.length) reCurrent.units = [{ name: "Logement 1", rent: 0, utilitiesIncluded: true, ownerOccupied: false }];
   reMode = "edit";
   renderPage();
 }
