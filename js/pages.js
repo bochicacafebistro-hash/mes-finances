@@ -1882,25 +1882,45 @@ function reNewAnalysis() {
     name: "",
     address: "",
     purchasePrice: 0,
+    // Mise de fond : peut être saisie en montant ou en pourcentage
+    downPaymentMode: "amount",   // "amount" | "percent"
     downPayment: 0,
+    downPaymentPercent: 20,
     amortYears: 25,
     interestRate: 5.5,
     paymentFrequency: "monthly",
     municipalTax: 0,
     schoolTax: 0,
     insurance: 0,
-    services: 0,
+    // Services décomposés
+    electricity: 0,             // $/mois (électricité payée par le proprio)
+    otherServiceName: "",       // nom libre (ex: "Internet immeuble", "Déneigement")
+    otherServiceAmount: 0,      // $/mois
     maintenancePercent: 5,
     vacancyPercent: 3,
     managementPercent: 0,
     unitType: "triplex",
     units: [
-      { name: "Logement 1", rent: 0, utilitiesIncluded: true },
-      { name: "Logement 2", rent: 0, utilitiesIncluded: true },
-      { name: "Logement 3", rent: 0, utilitiesIncluded: true }
+      { name: "Logement 1", rent: 0, utilitiesIncluded: true, ownerOccupied: false },
+      { name: "Logement 2", rent: 0, utilitiesIncluded: true, ownerOccupied: false },
+      { name: "Logement 3", rent: 0, utilitiesIncluded: true, ownerOccupied: false }
     ],
     notes: ""
   };
+}
+
+// Renvoie la mise de fond effective en $, peu importe le mode de saisie.
+function reEffectiveDownPayment(a) {
+  if (a.downPaymentMode === "percent") {
+    return ((Number(a.purchasePrice) || 0) * (Number(a.downPaymentPercent) || 0)) / 100;
+  }
+  return Number(a.downPayment) || 0;
+}
+function reEffectiveDownPaymentPercent(a) {
+  const price = Number(a.purchasePrice) || 0;
+  if (a.downPaymentMode === "percent") return Number(a.downPaymentPercent) || 0;
+  if (price <= 0) return 0;
+  return ((Number(a.downPayment) || 0) / price) * 100;
 }
 
 // Calcul de paiement hypothécaire — méthode canadienne (composition semi-annuelle)
@@ -1922,8 +1942,11 @@ function canadianMortgagePayment(principal, annualRatePct, years, freq) {
 }
 
 function calculateRealEstateMetrics(a) {
-  // Loyers
-  const grossMonthlyRent = (a.units || []).reduce((s, u) => s + (Number(u.rent) || 0), 0);
+  // Loyers — on exclut les logements occupés par le propriétaire
+  const rentingUnits = (a.units || []).filter(u => !u.ownerOccupied);
+  const ownerOccupiedUnits = (a.units || []).filter(u => u.ownerOccupied);
+  const hasOwnerOccupied = ownerOccupiedUnits.length > 0;
+  const grossMonthlyRent = rentingUnits.reduce((s, u) => s + (Number(u.rent) || 0), 0);
   const grossAnnualRent = grossMonthlyRent * 12;
   // Vacance
   const vacancyLoss = grossAnnualRent * ((Number(a.vacancyPercent) || 0) / 100);
@@ -1932,14 +1955,22 @@ function calculateRealEstateMetrics(a) {
   const municipalTax = Number(a.municipalTax) || 0;
   const schoolTax    = Number(a.schoolTax) || 0;
   const insurance    = Number(a.insurance) || 0;
-  const servicesY    = (Number(a.services) || 0) * 12;
+  // Services décomposés + compat descendante (anciens docs avec field "services")
+  const electricityMo = Number(a.electricity) || 0;
+  const otherServiceMo = Number(a.otherServiceAmount) || 0;
+  const legacyServicesMo = (a.electricity === undefined && a.otherServiceAmount === undefined)
+    ? (Number(a.services) || 0) : 0;
+  const servicesMonthly = electricityMo + otherServiceMo + legacyServicesMo;
+  const servicesY    = servicesMonthly * 12;
   const maintenance  = grossAnnualRent * ((Number(a.maintenancePercent) || 0) / 100);
   const management   = effectiveGrossIncome * ((Number(a.managementPercent) || 0) / 100);
   const totalOpex = municipalTax + schoolTax + insurance + servicesY + maintenance + management;
   // NOI (Net Operating Income) — exclut le service de la dette
   const noi = effectiveGrossIncome - totalOpex;
-  // Hypothèque
-  const principal = Math.max(0, (Number(a.purchasePrice) || 0) - (Number(a.downPayment) || 0));
+  // Hypothèque — basée sur la mise de fond effective (peu importe le mode de saisie)
+  const downPayment = reEffectiveDownPayment(a);
+  const downPaymentPct = reEffectiveDownPaymentPercent(a);
+  const principal = Math.max(0, (Number(a.purchasePrice) || 0) - downPayment);
   const monthlyPmt  = canadianMortgagePayment(principal, a.interestRate, a.amortYears, "monthly");
   const biweeklyPmt = canadianMortgagePayment(principal, a.interestRate, a.amortYears, "biweekly_accel");
   const weeklyPmt   = canadianMortgagePayment(principal, a.interestRate, a.amortYears, "weekly_accel");
@@ -1947,6 +1978,9 @@ function calculateRealEstateMetrics(a) {
   const annualMortgageStd = monthlyPmt * 12;
   const annualCashFlow = noi - annualMortgageStd;
   const monthlyCashFlow = annualCashFlow / 12;
+  // Coût mensuel pour habiter (si proprio-occupant) — c'est ce qui sort de la poche
+  // = -cashflow : si négatif, on paie; si positif, on encaisse en habitant
+  const costToLiveMonthly = -monthlyCashFlow;
   // Cap rate (sur NOI / prix d'achat)
   const capRate = (a.purchasePrice > 0) ? (noi / a.purchasePrice) * 100 : 0;
   // MRB (prix / revenu brut annuel)
@@ -1956,9 +1990,17 @@ function calculateRealEstateMetrics(a) {
   const stressAnnualMortgage = stressMonthlyPmt * 12;
   const stressAnnualCashFlow = noi - stressAnnualMortgage;
   const stressMonthlyCashFlow = stressAnnualCashFlow / 12;
-  // Verdict
+  // Verdict — si propriétaire-occupant, l'évaluation est différente (on ne juge pas sur cash flow seul)
   let verdict = "unknown";
-  if (grossAnnualRent > 0 && a.purchasePrice > 0) {
+  if (hasOwnerOccupied) {
+    // Logique ajustée : verdict basé sur capacité de payer + métriques pures de l'immeuble
+    if (a.purchasePrice > 0 && (grossAnnualRent > 0 || hasOwnerOccupied)) {
+      if (stressMonthlyCashFlow < -1500) verdict = "bad";        // gros débours mensuel même sans stress
+      else if (stressMonthlyCashFlow < -500) verdict = "risky";  // débours notable
+      else if (monthlyCashFlow >= 0) verdict = "excellent";      // on encaisse en plus d'habiter !
+      else verdict = "good";                                     // débours raisonnable
+    }
+  } else if (grossAnnualRent > 0 && a.purchasePrice > 0) {
     if (monthlyCashFlow < 0) verdict = "bad";
     else if (capRate < 4 || mrb > 12 || stressMonthlyCashFlow < -200) verdict = "risky";
     else if (capRate >= 6 && mrb <= 8 && stressMonthlyCashFlow >= 0) verdict = "excellent";
@@ -1966,11 +2008,16 @@ function calculateRealEstateMetrics(a) {
   }
   return {
     grossMonthlyRent, grossAnnualRent, vacancyLoss, effectiveGrossIncome,
-    municipalTax, schoolTax, insurance, servicesY, maintenance, management, totalOpex,
-    noi, principal, monthlyPmt, biweeklyPmt, weeklyPmt,
+    municipalTax, schoolTax, insurance,
+    electricityMo, otherServiceMo, servicesMonthly, servicesY,
+    maintenance, management, totalOpex,
+    noi, principal, downPayment, downPaymentPct,
+    monthlyPmt, biweeklyPmt, weeklyPmt,
     annualMortgageStd, annualCashFlow, monthlyCashFlow,
+    costToLiveMonthly,
     capRate, mrb,
     stressMonthlyPmt, stressMonthlyCashFlow,
+    hasOwnerOccupied, ownerOccupiedCount: ownerOccupiedUnits.length, rentingUnitsCount: rentingUnits.length,
     verdict
   };
 }
@@ -2064,12 +2111,29 @@ function renderRealEstateEdit() {
             </label>
             <label class="re-field">
               <span>${t("re_field_price")}</span>
-              <input type="number" min="0" step="1000" value="${a.purchasePrice || ""}" oninput="reCurrent.purchasePrice=Number(this.value)||0;reRefresh()">
+              <input type="number" min="0" step="1000" value="${a.purchasePrice || ""}" oninput="reCurrent.purchasePrice=Number(this.value)||0;reRefreshDownPaymentHint();reRefresh()">
             </label>
-            <label class="re-field">
-              <span>${t("re_field_downpayment")}</span>
-              <input type="number" min="0" step="1000" value="${a.downPayment || ""}" oninput="reCurrent.downPayment=Number(this.value)||0;reRefresh()">
-            </label>
+            <div class="re-field">
+              <div class="re-field__head">
+                <span>${t("re_field_downpayment")}</span>
+                <div class="re-toggle" role="tablist">
+                  <button type="button" class="re-toggle__btn ${a.downPaymentMode !== "percent" ? "is-active" : ""}" onclick="reSetDownPaymentMode('amount')">$</button>
+                  <button type="button" class="re-toggle__btn ${a.downPaymentMode === "percent" ? "is-active" : ""}" onclick="reSetDownPaymentMode('percent')">%</button>
+                </div>
+              </div>
+              ${a.downPaymentMode === "percent" ? `
+                <div class="re-input-suffix">
+                  <input type="number" min="0" max="100" step="0.5" value="${a.downPaymentPercent ?? ""}" oninput="reCurrent.downPaymentPercent=Number(this.value)||0;reRefreshDownPaymentHint();reRefresh()">
+                  <span class="re-input-suffix__symbol">%</span>
+                </div>
+              ` : `
+                <div class="re-input-suffix">
+                  <span class="re-input-suffix__symbol re-input-suffix__symbol--left">$</span>
+                  <input type="number" min="0" step="1000" value="${a.downPayment || ""}" oninput="reCurrent.downPayment=Number(this.value)||0;reRefreshDownPaymentHint();reRefresh()">
+                </div>
+              `}
+              <small class="re-hint" id="re-downpayment-hint">${reDownPaymentHintText(a)}</small>
+            </div>
             <label class="re-field re-field--wide">
               <span>${t("re_field_unit_type")}</span>
               <select onchange="reSetUnitType(this.value)">
@@ -2117,10 +2181,25 @@ function renderRealEstateEdit() {
               <input type="number" min="0" step="50" value="${a.insurance || ""}" oninput="reCurrent.insurance=Number(this.value)||0;reRefresh()">
             </label>
             <label class="re-field">
-              <span>${t("re_field_services")}</span>
-              <input type="number" min="0" step="10" value="${a.services || ""}" oninput="reCurrent.services=Number(this.value)||0;reRefresh()">
-              <small class="re-hint">${t("re_field_services_hint")}</small>
+              <span>${t("re_field_electricity")}</span>
+              <div class="re-input-suffix">
+                <span class="re-input-suffix__symbol re-input-suffix__symbol--left">$</span>
+                <input type="number" min="0" step="10" value="${a.electricity || ""}" oninput="reCurrent.electricity=Number(this.value)||0;reRefresh()">
+                <span class="re-input-suffix__symbol">${t("re_metric_per_month")}</span>
+              </div>
+              <small class="re-hint">${t("re_field_electricity_hint")}</small>
             </label>
+            <div class="re-field">
+              <div class="re-field__head">
+                <input type="text" class="re-field__inline-input" placeholder="${t("re_field_other_service_placeholder")}" value="${esc(a.otherServiceName || "")}" oninput="reCurrent.otherServiceName=this.value">
+              </div>
+              <div class="re-input-suffix">
+                <span class="re-input-suffix__symbol re-input-suffix__symbol--left">$</span>
+                <input type="number" min="0" step="10" value="${a.otherServiceAmount || ""}" oninput="reCurrent.otherServiceAmount=Number(this.value)||0;reRefresh()">
+                <span class="re-input-suffix__symbol">${t("re_metric_per_month")}</span>
+              </div>
+              <small class="re-hint">${t("re_field_other_service_hint")}</small>
+            </div>
             <label class="re-field">
               <span>${t("re_field_maintenance")}</span>
               <input type="number" min="0" max="50" step="0.5" value="${a.maintenancePercent || ""}" oninput="reCurrent.maintenancePercent=Number(this.value)||0;reRefresh()">
@@ -2145,16 +2224,31 @@ function renderRealEstateEdit() {
           </h3>
           <div class="re-units">
             ${a.units.map((u, i) => `
-              <div class="re-unit">
-                <div class="re-unit__label">${t("re_unit_label").replace("{n}", i + 1)}</div>
-                <label class="re-field">
-                  <span>${t("re_unit_rent")}</span>
-                  <input type="number" min="0" step="25" value="${u.rent || ""}" oninput="reCurrent.units[${i}].rent=Number(this.value)||0;reRefresh()">
+              <div class="re-unit ${u.ownerOccupied ? "re-unit--owner" : ""}">
+                <div class="re-unit__head">
+                  <div class="re-unit__label">${t("re_unit_label").replace("{n}", i + 1)}</div>
+                  ${u.ownerOccupied ? `<span class="re-unit__owner-badge">${icon("home", 12)} ${t("re_unit_owner_badge")}</span>` : ""}
+                </div>
+                <label class="re-checkbox re-checkbox--owner">
+                  <input type="checkbox" ${u.ownerOccupied ? "checked" : ""} onchange="reToggleOwnerOccupied(${i}, this.checked)">
+                  <span>${t("re_unit_owner_occupied")}</span>
                 </label>
-                <label class="re-checkbox">
-                  <input type="checkbox" ${u.utilitiesIncluded ? "checked" : ""} onchange="reCurrent.units[${i}].utilitiesIncluded=this.checked">
-                  <span>${t("re_unit_utilities")}</span>
-                </label>
+                ${u.ownerOccupied ? `
+                  <div class="re-unit__hint">${t("re_unit_owner_hint")}</div>
+                ` : `
+                  <label class="re-field">
+                    <span>${t("re_unit_rent")}</span>
+                    <div class="re-input-suffix">
+                      <span class="re-input-suffix__symbol re-input-suffix__symbol--left">$</span>
+                      <input type="number" min="0" step="25" value="${u.rent || ""}" oninput="reCurrent.units[${i}].rent=Number(this.value)||0;reRefresh()">
+                      <span class="re-input-suffix__symbol">${t("re_metric_per_month")}</span>
+                    </div>
+                  </label>
+                  <label class="re-checkbox">
+                    <input type="checkbox" ${u.utilitiesIncluded ? "checked" : ""} onchange="reCurrent.units[${i}].utilitiesIncluded=this.checked">
+                    <span>${t("re_unit_utilities")}</span>
+                  </label>
+                `}
                 ${a.unitType === "custom" && a.units.length > 1 ? `<button class="btn-link btn-link--danger" onclick="reRemoveUnit(${i})">${t("re_unit_remove")}</button>` : ""}
               </div>
             `).join("")}
@@ -2179,12 +2273,22 @@ function renderRealEstateResults(a) {
   const m = calculateRealEstateMetrics(a);
   const cfClass = m.monthlyCashFlow >= 0 ? "pos" : "neg";
   const stressClass = m.stressMonthlyCashFlow >= 0 ? "pos" : "neg";
+  // Coût pour habiter : positif = ça sort de la poche, négatif = on encaisse même en habitant
+  const costClass = m.costToLiveMonthly <= 0 ? "pos" : "neg";
   return `
     <div class="re-results__sticky">
       <div class="re-verdict-big re-verdict--${m.verdict}">
         <div class="re-verdict-big__label">${t("re_verdict_" + m.verdict)}</div>
         <div class="re-verdict-big__hint">${t("re_hint_" + (m.verdict === "unknown" ? "good" : m.verdict))}</div>
       </div>
+
+      ${m.hasOwnerOccupied ? `
+        <div class="re-metric re-metric--highlight">
+          <div class="re-metric__label">${icon("home", 12)} ${t("re_metric_cost_to_live")}</div>
+          <div class="re-metric__value re-metric__value--big re-metric__value--${costClass}">${m.costToLiveMonthly <= 0 ? "+" : ""}${fmtMoney(Math.abs(m.costToLiveMonthly))}<span class="re-metric__suffix">${t("re_metric_per_month")}</span></div>
+          <div class="re-metric__sub">${m.costToLiveMonthly > 0 ? t("re_metric_cost_to_live_neg") : t("re_metric_cost_to_live_pos")}</div>
+        </div>
+      ` : ""}
 
       <div class="re-metric">
         <div class="re-metric__label">${t("re_metric_cashflow")}</div>
@@ -2259,6 +2363,42 @@ function reRefresh() {
   // Met à jour seulement le panneau de résultats, sans recréer les inputs (préserve le focus)
   const panel = document.getElementById("re-results");
   if (panel && reCurrent) panel.innerHTML = renderRealEstateResults(reCurrent);
+}
+function reRefreshDownPaymentHint() {
+  const el = document.getElementById("re-downpayment-hint");
+  if (el && reCurrent) el.textContent = reDownPaymentHintText(reCurrent);
+}
+function reDownPaymentHintText(a) {
+  const price = Number(a.purchasePrice) || 0;
+  if (a.downPaymentMode === "percent") {
+    const dollar = (price * (Number(a.downPaymentPercent) || 0)) / 100;
+    return price > 0 ? `≈ ${fmtMoney(dollar)}` : "Entre d'abord le prix d'achat pour voir l'équivalent en $.";
+  }
+  const dp = Number(a.downPayment) || 0;
+  if (price <= 0) return "Entre d'abord le prix d'achat pour voir l'équivalent en %.";
+  const pct = (dp / price) * 100;
+  return `≈ ${pct.toFixed(1)}% du prix d'achat`;
+}
+function reSetDownPaymentMode(mode) {
+  if (!reCurrent) return;
+  const price = Number(reCurrent.purchasePrice) || 0;
+  // Quand on bascule, on synchronise pour préserver la valeur saisie
+  if (mode === "percent" && reCurrent.downPaymentMode !== "percent") {
+    if (price > 0) reCurrent.downPaymentPercent = +(((Number(reCurrent.downPayment) || 0) / price) * 100).toFixed(2);
+  } else if (mode === "amount" && reCurrent.downPaymentMode === "percent") {
+    if (price > 0) reCurrent.downPayment = Math.round((price * (Number(reCurrent.downPaymentPercent) || 0)) / 100);
+  }
+  reCurrent.downPaymentMode = mode;
+  renderPage();
+}
+function reToggleOwnerOccupied(idx, checked) {
+  if (!reCurrent || !reCurrent.units || !reCurrent.units[idx]) return;
+  reCurrent.units[idx].ownerOccupied = !!checked;
+  if (checked) {
+    // On garde le loyer à 0 et utilities included par défaut quand on habite
+    reCurrent.units[idx].rent = 0;
+  }
+  renderPage();
 }
 function reSetUnitType(type) {
   if (!reCurrent) return;

@@ -3745,6 +3745,141 @@ h1, h2, h3, h4 {
 .btn-link--danger { color: var(--status-red); }
 .btn-link--danger:hover { color: var(--status-red); opacity: 0.8; }
 
+/* Toggle $ / % pour mise de fond */
+.re-field__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--sp-2);
+}
+.re-toggle {
+  display: inline-flex;
+  background: var(--surface2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-pill);
+  padding: 2px;
+  gap: 2px;
+}
+.re-toggle__btn {
+  border: none;
+  background: transparent;
+  color: var(--text3);
+  font-size: var(--fs-sm);
+  font-weight: 700;
+  padding: 4px 12px;
+  border-radius: var(--radius-pill);
+  cursor: pointer;
+  transition: background var(--transition-fast), color var(--transition-fast);
+  min-width: 32px;
+}
+.re-toggle__btn:hover { color: var(--text); }
+.re-toggle__btn.is-active {
+  background: var(--accent);
+  color: var(--accent-text);
+}
+.re-field__inline-input {
+  border: 1px dashed var(--border-strong) !important;
+  background: transparent !important;
+  font-weight: 600 !important;
+  padding: 4px 8px !important;
+  font-size: var(--fs-sm) !important;
+  border-radius: var(--radius-sm) !important;
+  flex: 1;
+}
+.re-field__inline-input:focus { border-style: solid !important; }
+
+/* Input avec préfixe/suffixe ($ / %, /mois) */
+.re-input-suffix {
+  display: flex;
+  align-items: center;
+  background: var(--bg);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-md);
+  transition: border-color var(--transition-fast), box-shadow var(--transition-fast);
+  overflow: hidden;
+}
+.re-input-suffix:focus-within {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px rgba(16,185,129,0.15);
+}
+.re-input-suffix > input {
+  border: none !important;
+  background: transparent !important;
+  box-shadow: none !important;
+  flex: 1;
+  min-width: 0;
+  padding: 10px 8px !important;
+}
+.re-input-suffix > input:focus {
+  outline: none !important;
+  box-shadow: none !important;
+  border: none !important;
+}
+.re-input-suffix__symbol {
+  font-size: var(--fs-sm);
+  font-weight: 600;
+  color: var(--text3);
+  padding: 0 12px;
+  white-space: nowrap;
+  user-select: none;
+}
+.re-input-suffix__symbol--left {
+  border-right: 1px solid var(--border);
+  padding-right: 10px;
+}
+.re-input-suffix__symbol:not(.re-input-suffix__symbol--left) {
+  border-left: 1px solid var(--border);
+  padding-left: 10px;
+}
+
+/* Unité — état proprio-occupant */
+.re-unit__head {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-2);
+  flex-wrap: wrap;
+}
+.re-unit__owner-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  background: var(--status-blue-bg);
+  color: var(--status-blue);
+  border: 1px solid var(--status-blue-border);
+  border-radius: var(--radius-pill);
+  padding: 2px 8px;
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.4px;
+}
+.re-unit__hint {
+  font-size: var(--fs-xs);
+  color: var(--text3);
+  font-style: italic;
+  line-height: 1.4;
+}
+.re-unit--owner {
+  background: var(--status-blue-bg);
+  border-color: var(--status-blue-border);
+}
+.re-checkbox--owner {
+  font-weight: 600;
+  color: var(--text);
+}
+
+/* Métrique mise en évidence (coût pour habiter) */
+.re-metric--highlight {
+  background: var(--status-blue-bg);
+  border-color: var(--status-blue-border);
+}
+.re-metric--highlight .re-metric__label {
+  color: var(--status-blue);
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
 /* Responsive */
 @media (max-width: 900px) {
   .re-grid { grid-template-columns: 1fr; }
