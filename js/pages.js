@@ -1910,6 +1910,8 @@ function reNewAnalysis() {
     // Seuils MRB personnalisables (varient selon le marché local : centre urbain plus haut, banlieue plus bas)
     mrbTargetGood: 14,         // MRB max pour qualifier de "bon" investissement (défaut Qc urbain)
     mrbTargetExcellent: 10,    // MRB max pour qualifier d'"excellent" investissement
+    // Simulateur de prix d'offre — cash flow mensuel souhaité (défaut 0 = équilibre)
+    simTargetCashFlow: 0,
     // Frais de clôture (ponctuels, payés à l'achat) — auto-calculés mais modifiables
     welcomeTaxAuto: true,      // si true, recalculer auto selon prix
     welcomeTax: 0,             // taxe de bienvenue Qc
@@ -2448,8 +2450,123 @@ function getVerdictReasons(a, m) {
   return reasons;
 }
 
-// Calcule le prix d'achat maximum qui ferait de cet immeuble un "bon" ou "excellent" investissement
-// en gardant tous les autres paramètres (loyers, charges, taux, mise de fond) identiques.
+// Simulateur de prix : étant donné un cash flow mensuel cible, calcule le prix d'achat
+// nécessaire pour l'atteindre, en gardant les autres paramètres identiques.
+function reSimulatePrice(a, targetMonthlyCashFlow) {
+  const rentingUnits = (a.units || []).filter(u => !u.ownerOccupied);
+  const hasOwnerOccupied = (a.units || []).some(u => u.ownerOccupied);
+  const grossAnnualRent = rentingUnits.reduce((s, u) => s + (Number(u.rent) || 0), 0) * 12;
+
+  if (rentingUnits.length === 0) {
+    return { incomplete: true, reason: "all_owner_occupied" };
+  }
+  if (grossAnnualRent <= 0) {
+    return { incomplete: true, reason: "no_rent_entered" };
+  }
+
+  // NOI assume rent-based maintenance (mode percent) ou montant fixe (modes monthly/annual)
+  const vacancyPct = a.vacancyEnabled === false ? 0 : (Number(a.vacancyPercent) || 0);
+  const effIncome = grossAnnualRent * (1 - vacancyPct / 100);
+  const electricityMo = Number(a.electricity) || 0;
+  const otherRaw = Number(a.otherServiceAmount) || 0;
+  const otherIsAnnual = a.otherServiceFrequency === "annual";
+  const otherMo = otherIsAnnual ? (otherRaw / 12) : otherRaw;
+  const fixedOpex = (Number(a.municipalTax) || 0)
+                  + (Number(a.schoolTax) || 0)
+                  + (Number(a.insurance) || 0)
+                  + (electricityMo + otherMo) * 12;
+  let maintenance;
+  if (a.maintenanceMode === "monthly") maintenance = (Number(a.maintenanceAmount) || 0) * 12;
+  else if (a.maintenanceMode === "annual") maintenance = Number(a.maintenanceAmount) || 0;
+  else maintenance = grossAnnualRent * ((Number(a.maintenancePercent) || 0) / 100);
+  const management = effIncome * ((Number(a.managementPercent) || 0) / 100);
+  const noi = effIncome - (fixedOpex + maintenance + management);
+
+  if (noi <= 0) {
+    return { infeasible: true, reason: "Les charges opérationnelles dépassent les loyers, peu importe le prix d'achat. Augmenter les loyers, baisser les charges, ou choisir un autre immeuble." };
+  }
+
+  // DP effectif en % (utilisé pour le simulateur, peu importe le mode de saisie)
+  const currentPrice = Number(a.purchasePrice) || 0;
+  let effectiveDpPct;
+  if (a.downPaymentMode === "percent") {
+    effectiveDpPct = Number(a.downPaymentPercent) || 0;
+  } else {
+    effectiveDpPct = currentPrice > 0 ? ((Number(a.downPayment) || 0) / currentPrice) * 100 : 20;
+  }
+  effectiveDpPct = Math.max(0, Math.min(100, effectiveDpPct));
+
+  // Taux SCHL selon le %, ajouté au principal
+  let schlRate = 0;
+  if (effectiveDpPct < 20 && effectiveDpPct >= 15) schlRate = 0.028;
+  else if (effectiveDpPct < 15 && effectiveDpPct >= 10) schlRate = 0.031;
+  else if (effectiveDpPct < 10 && effectiveDpPct >= 5) schlRate = 0.040;
+
+  // Facteur d'hypothèque annuel par $1 de principal (composition canadienne)
+  const r = (Number(a.interestRate) || 0) / 100;
+  const n = (Number(a.amortYears) || 25) * 12;
+  const iMonthly = Math.pow(1 + r / 2, 2 / 12) - 1;
+  const mortFactor = iMonthly === 0 ? 12 / n : 12 * iMonthly / (1 - Math.pow(1 + iMonthly, -n));
+
+  // Coefficient principal en fonction du prix:
+  //   baseLoan = price × (1 - dpPct/100)
+  //   principal = baseLoan × (1 + schlRate)
+  //   annualMortgage = principal × mortFactor
+  const principalCoef = (1 - effectiveDpPct / 100) * (1 + schlRate);
+
+  // Cible: cashFlowAnnuel = noi - annualMortgage = 12 × T
+  // => annualMortgage = noi - 12 × T
+  // => price × principalCoef × mortFactor = noi - 12 × T
+  // => price = (noi - 12 × T) / (principalCoef × mortFactor)
+  const T = Number(targetMonthlyCashFlow) || 0;
+  const requiredAnnualNetRent = noi - 12 * T;
+
+  if (principalCoef <= 0) {
+    // 100% comptant — pas d'hypothèque, cash flow = NOI/12 indépendant du prix
+    return { infeasible: true, reason: "Avec 100% de mise de fond, il n'y a pas d'hypothèque — le prix d'achat n'affecte plus le cash flow.", noi };
+  }
+
+  if (requiredAnnualNetRent <= 0) {
+    return { infeasible: true, reason: "Ton objectif de cash flow dépasse le revenu net de l'immeuble. Baisse la cible ou améliore les revenus locatifs." };
+  }
+
+  const simulatedPrice = requiredAnnualNetRent / (mortFactor * principalCoef);
+
+  // Métriques au prix simulé
+  const simBaseLoan = simulatedPrice * (1 - effectiveDpPct / 100);
+  const simSchlPremium = simBaseLoan * schlRate;
+  const simPrincipal = simBaseLoan + simSchlPremium;
+  const simMortPmtMonthly = canadianMortgagePayment(simPrincipal, a.interestRate, a.amortYears, "monthly");
+  const simAnnualMortgage = simMortPmtMonthly * 12;
+  const simCapRate = simulatedPrice > 0 ? (noi / simulatedPrice) * 100 : 0;
+  const simMrb = grossAnnualRent > 0 ? simulatedPrice / grossAnnualRent : null;
+  const simDscr = simAnnualMortgage > 0 ? noi / simAnnualMortgage : null;
+  const simDownPaymentDollar = simulatedPrice * effectiveDpPct / 100;
+  const simWelcomeTax = a.welcomeTaxAuto !== false ? reComputeWelcomeTax(simulatedPrice) : 0;
+  const simClosing = simWelcomeTax + (Number(a.notaryFees) || 0) + (Number(a.inspectionFees) || 0) + (Number(a.otherClosingFees) || 0);
+  const simCashToClose = simDownPaymentDollar + simClosing;
+  const simAnnualCashFlow = noi - simAnnualMortgage;
+  const simCoC = simCashToClose > 0 ? (simAnnualCashFlow / simCashToClose) * 100 : null;
+
+  // Comparaison avec le prix demandé
+  const diff = currentPrice - simulatedPrice;
+  const diffPct = currentPrice > 0 ? (diff / currentPrice) * 100 : 0;
+
+  return {
+    incomplete: false, infeasible: false,
+    targetCashFlow: T,
+    simulatedPrice,
+    simCapRate, simMrb, simDscr, simCoC,
+    simDownPaymentDollar, simSchlPremium, simCashToClose,
+    simMortPmtMonthly, simAnnualMortgage,
+    diff, diffPct,
+    effectiveDpPct, schlRate,
+    noi, grossAnnualRent,
+    askingPrice: currentPrice
+  };
+}
+
+// Ancien calcul de prix conseillé conservé pour compatibilité (utilisé nulle part maintenant)
 function reSuggestedPrice(a) {
   const rentingUnits = (a.units || []).filter(u => !u.ownerOccupied);
   const hasOwnerOccupied = (a.units || []).some(u => u.ownerOccupied);
@@ -3257,8 +3374,141 @@ function renderClosingCostsFields(a) {
   `;
 }
 
-// Carte qui suggère un prix d'offre pour que ce soit un bon/excellent investissement
+// Simulateur de prix d'offre : tu entres un cash flow cible, on calcule le prix nécessaire.
 function renderSuggestedPriceCard(a) {
+  const target = Number(a.simTargetCashFlow) || 0;
+  const s = reSimulatePrice(a, target);
+  if (!s) return "";
+  // États "incomplet" ou "infaisable"
+  if (s.incomplete) {
+    const msgKey = s.reason === "all_owner_occupied" ? "re_suggested_all_owner" : "re_suggested_no_rent";
+    return `
+      <div class="re-suggested re-suggested--incomplete">
+        <div class="re-suggested__title">${icon("dollar-sign", 14)} ${t("re_simulator_title")}</div>
+        <div class="re-suggested__hint">${t(msgKey)}</div>
+      </div>
+    `;
+  }
+  if (s.infeasible) {
+    return `
+      <div class="re-suggested re-suggested--infeasible">
+        <div class="re-suggested__title">${icon("alert-triangle", 14)} ${t("re_suggested_infeasible_title")}</div>
+        <div class="re-suggested__hint">${s.reason || ""}</div>
+        <div class="re-sim__target-row">
+          <label class="re-sim__target-label">${t("re_sim_target_cf")}</label>
+          ${renderSimTargetInput(target)}
+        </div>
+      </div>
+    `;
+  }
+  const askingPrice = s.askingPrice;
+  const simPrice = Math.max(0, Math.round(s.simulatedPrice));
+  const diff = Math.round(s.diff);
+  const diffPct = s.diffPct;
+  // Direction: si simPrice <= askingPrice, il faut négocier vers le bas (économie). Sinon, le prix demandé est déjà très bon.
+  const isDeal = askingPrice > 0 && askingPrice <= simPrice;
+  return `
+    <div class="re-suggested ${isDeal ? "re-suggested--recommended" : ""}">
+      <div class="re-suggested__title">${icon("dollar-sign", 14)} ${t("re_simulator_title")}</div>
+
+      <div class="re-suggested__row">
+        <div class="re-suggested__label">${t("re_suggested_asking")}</div>
+        <div class="re-suggested__price re-suggested__price--asking">${fmtMoney(askingPrice)}</div>
+      </div>
+
+      <div class="re-sim__target-row">
+        <label class="re-sim__target-label">${t("re_sim_target_cf")}${reTip("re_tip_sim_target")}</label>
+        ${renderSimTargetInput(target)}
+      </div>
+
+      <div class="re-suggested__row re-suggested__row--good">
+        <div class="re-suggested__label">${t("re_sim_required_price")}</div>
+        <div class="re-suggested__price re-suggested__price--good">${fmtMoney(simPrice)}</div>
+        ${askingPrice > 0 ? `<div class="re-suggested__diff ${diff >= 0 ? "re-suggested__diff--save" : "re-suggested__diff--over"}">
+          <span class="re-suggested__diff-money">${diff >= 0 ? "−" : "+"}${fmtMoney(Math.abs(diff))}</span>
+          <span class="re-suggested__diff-pct">${diffPct >= 0 ? "−" : "+"}${Math.abs(diffPct).toFixed(1)}%</span>
+        </div>` : ""}
+      </div>
+
+      ${isDeal ? `<div class="re-sim__deal-banner">${icon("check-circle", 12)} ${t("re_sim_already_good")}</div>` : ""}
+
+      <div class="re-sim__metrics">
+        <div class="re-sim__metric">
+          <div class="re-sim__metric-label">${t("re_metric_cap_rate")}</div>
+          <div class="re-sim__metric-value">${s.simCapRate.toFixed(2)}%</div>
+        </div>
+        <div class="re-sim__metric">
+          <div class="re-sim__metric-label">${t("re_metric_mrb")}</div>
+          <div class="re-sim__metric-value">${s.simMrb !== null ? s.simMrb.toFixed(1) : "—"}</div>
+        </div>
+        <div class="re-sim__metric">
+          <div class="re-sim__metric-label">${t("re_metric_dscr")}</div>
+          <div class="re-sim__metric-value">${s.simDscr !== null ? s.simDscr.toFixed(2) : "—"}</div>
+        </div>
+        <div class="re-sim__metric">
+          <div class="re-sim__metric-label">${t("re_metric_coc")}</div>
+          <div class="re-sim__metric-value">${s.simCoC !== null ? s.simCoC.toFixed(2) + "%" : "—"}</div>
+        </div>
+      </div>
+
+      <details class="re-suggested__details">
+        <summary class="re-suggested__more">
+          <span>${t("re_sim_more_detail")}</span>
+          <span class="re-verdict-details__chevron">▾</span>
+        </summary>
+        <div class="re-suggested__explain">
+          <div class="re-suggested__expl-row">
+            <strong>${t("re_sim_dp_at_price")}</strong>
+            <div>${fmtMoney(s.simDownPaymentDollar)} (${s.effectiveDpPct.toFixed(1)}%)${s.simSchlPremium > 0 ? ` + ${fmtMoney(s.simSchlPremium)} SCHL au prêt` : ""}</div>
+          </div>
+          <div class="re-suggested__expl-row">
+            <strong>${t("re_sim_cash_to_close")}</strong>
+            <div>${fmtMoney(s.simCashToClose)} ${t("re_sim_dp_plus_closing")}</div>
+          </div>
+          <div class="re-suggested__expl-row">
+            <strong>${t("re_sim_monthly_pmt")}</strong>
+            <div>${fmtMoney(s.simMortPmtMonthly)} ${t("re_metric_per_month")}</div>
+          </div>
+          <div class="re-suggested__expl-note">${t("re_sim_note")}</div>
+        </div>
+      </details>
+    </div>
+  `;
+}
+
+// Petit input avec boutons − / + pour ajuster le cash flow cible
+function renderSimTargetInput(currentValue) {
+  return `
+    <div class="re-sim__target-input">
+      <button type="button" class="re-sim__btn" onclick="reAdjustSimTarget(-100)" aria-label="−100">−</button>
+      <div class="re-input-suffix re-sim__input-wrap">
+        <span class="re-input-suffix__symbol re-input-suffix__symbol--left">$</span>
+        <input type="number" inputmode="numeric" step="any" value="${currentValue}" onchange="reSetSimTarget(Number(this.value)||0)" oninput="reSetSimTargetLive(Number(this.value)||0)">
+        <span class="re-input-suffix__symbol">/mois</span>
+      </div>
+      <button type="button" class="re-sim__btn" onclick="reAdjustSimTarget(100)" aria-label="+100">+</button>
+    </div>
+  `;
+}
+
+function reSetSimTarget(value) {
+  if (!reCurrent) return;
+  reCurrent.simTargetCashFlow = value;
+  renderPage();
+}
+function reSetSimTargetLive(value) {
+  if (!reCurrent) return;
+  reCurrent.simTargetCashFlow = value;
+  reRefresh();
+}
+function reAdjustSimTarget(delta) {
+  if (!reCurrent) return;
+  reCurrent.simTargetCashFlow = (Number(reCurrent.simTargetCashFlow) || 0) + delta;
+  renderPage();
+}
+
+// Ancien renderSuggestedPriceCard supprimé — voici sa version remplacée par le simulateur ci-dessus.
+function _oldRenderSuggestedPriceCard_unused(a) {
   const s = reSuggestedPrice(a);
   if (!s) return ""; // sécurité — ne devrait pas arriver
   // État incomplet : tous proprio-occupant, ou pas de loyers entrés

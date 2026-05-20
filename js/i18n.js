@@ -320,6 +320,17 @@ const TRANSLATIONS = {
 
   // ── Prix d'offre suggéré ──────────────────────────
   re_suggested_title:    { fr: "Prix d'offre conseillé",       es: "Precio de oferta sugerido" },
+  re_simulator_title:    { fr: "Simulateur de prix d'offre",   es: "Simulador de precio de oferta" },
+  re_sim_target_cf:      { fr: "Cash flow mensuel souhaité",   es: "Flujo mensual deseado" },
+  re_tip_sim_target:     { fr: "Entre le cash flow mensuel que tu veux atteindre. L'app calcule le prix d'achat exact qui te donne ce cash flow, en gardant tes autres paramètres (loyers, charges, mise de fond, taux) identiques. 0 $ = équilibre parfait, +200 $ = bénéfice modeste, etc.", es: "Ingresa el flujo mensual deseado. El precio se calcula en función de tus otros parámetros." },
+  re_sim_required_price: { fr: "Prix nécessaire pour l'atteindre", es: "Precio necesario para alcanzarlo" },
+  re_sim_already_good:   { fr: "Le prix demandé atteint déjà ton objectif — tu peux même viser plus haut !", es: "El precio pedido ya alcanza tu objetivo." },
+  re_sim_more_detail:    { fr: "Voir le détail du prix simulé",es: "Ver detalle del precio simulado" },
+  re_sim_dp_at_price:    { fr: "Mise de fond à ce prix",       es: "Aporte inicial a este precio" },
+  re_sim_cash_to_close:  { fr: "Cash requis à la clôture",     es: "Efectivo requerido al cierre" },
+  re_sim_dp_plus_closing:{ fr: "(MF + taxe bienvenue + notaire + inspection)", es: "(aporte + impuestos + notario + inspección)" },
+  re_sim_monthly_pmt:    { fr: "Paiement hypothécaire mensuel",es: "Pago hipotecario mensual" },
+  re_sim_note:           { fr: "Le simulateur garde tous tes paramètres actuels (% MF, taux, loyers, charges) et calcule uniquement le prix d'achat qui te donne ton cash flow cible. Change la cible avec les boutons + / − ou tape directement.", es: "El simulador mantiene tus parámetros y calcula solo el precio." },
   re_suggested_strongly_recommended:{ fr: "Achat fortement recommandé", es: "Compra altamente recomendada" },
   re_suggested_strongly_hint:{ fr: "Le prix demandé ({price}) est déjà au niveau d'un excellent investissement. Tu peux acheter sans hésiter selon ton analyse.", es: "El precio pedido ({price}) ya está al nivel de una excelente inversión." },
   re_suggested_recommended:{ fr: "Achat conseillé",            es: "Compra recomendada" },
