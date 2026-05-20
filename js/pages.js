@@ -1914,6 +1914,11 @@ function reNewAnalysis() {
     // Assurance hypothécaire SCHL (si DP < 20%, ajoutée au prêt)
     schlAuto: true,            // recalculer auto selon ratio DP
     schlPremium: 0,            // prime SCHL en $
+    // Fiscalité (estimation simplifiée)
+    fiscalEnabled: false,      // si true, applique les calculs fiscaux
+    marginalTaxRate: 37.12,    // taux marginal combiné (fédéral+Qc) — moyen-supérieur défaut
+    useCCA: false,             // déduction pour amortissement (CCA classe 1)
+    buildingPortionPercent: 80, // % du prix attribué au bâtiment (pas le terrain)
     unitType: "triplex",
     units: [
       { name: "Logement 1", rent: 0, utilitiesIncluded: true, ownerOccupied: false },
@@ -1975,6 +1980,81 @@ function reEffectiveDownPaymentPercent(a) {
   if (a.downPaymentMode === "percent") return Number(a.downPaymentPercent) || 0;
   if (price <= 0) return 0;
   return ((Number(a.downPayment) || 0) / price) * 100;
+}
+
+// Calcule l'intérêt total payé sur la 1ère année d'hypothèque (utile pour fiscalité).
+function reInterestPaidYear1(principal, annualRatePct, years) {
+  if (!principal || principal <= 0 || annualRatePct <= 0 || !years) return 0;
+  const i = Math.pow(1 + annualRatePct / 100 / 2, 2 / 12) - 1;
+  const n = years * 12;
+  if (i === 0) return 0;
+  const PMT = principal * i / (1 - Math.pow(1 + i, -n));
+  let balance = principal;
+  let totalInterest = 0;
+  for (let m = 1; m <= 12; m++) {
+    const interestPortion = balance * i;
+    totalInterest += interestPortion;
+    balance -= (PMT - interestPortion);
+  }
+  return totalInterest;
+}
+
+// Calcule l'impact fiscal annuel : revenu locatif imposable, impôt, cash flow après impôt.
+// Optionnel : CCA (amortissement bâtiment 4% classe 1, règle demi-année année 1).
+// Optionnel : projection du gain en capital à la vente.
+function reFiscalImpact(a, m, horizon) {
+  if (!a || !m) return null;
+  const taxRate = (Number(a.marginalTaxRate) || 0) / 100;
+  // Intérêt hypothécaire déductible (approximation : intérêt année 1, légèrement décroissant chaque année)
+  const interestY1 = reInterestPaidYear1(m.principal, a.interestRate, a.amortYears || 25);
+  // CCA optionnelle
+  const buildingPct = Math.min(100, Math.max(0, Number(a.buildingPortionPercent) || 80)) / 100;
+  const buildingValue = (Number(a.purchasePrice) || 0) * buildingPct;
+  // Règle demi-année : année 1 CCA = bâtiment × 4% × 50%
+  const ccaY1 = a.useCCA ? buildingValue * 0.04 * 0.5 : 0;
+  // Revenu net imposable = NOI − intérêts − CCA (plancher à 0 car CCA ne peut créer une perte au Qc)
+  const taxableIncomePreCCA = m.noi - interestY1;
+  const taxableIncome = Math.max(0, taxableIncomePreCCA - ccaY1);
+  const annualIncomeTax = Math.max(0, taxableIncome * taxRate);
+  const annualAfterTaxCashFlow = m.annualCashFlow - annualIncomeTax;
+  const monthlyAfterTaxCashFlow = annualAfterTaxCashFlow / 12;
+  // Gain en capital projeté à l'horizon de projection
+  const apprRate = (Number(a.appreciationPercent) || 0) / 100;
+  const horizonYears = Math.max(1, Number(horizon) || 10);
+  const futureValue = (Number(a.purchasePrice) || 0) * Math.pow(1 + apprRate, horizonYears);
+  const capitalGain = Math.max(0, futureValue - (Number(a.purchasePrice) || 0));
+  const taxableCapitalGain = capitalGain * 0.50; // 50% inclus au revenu
+  const capitalGainTax = taxableCapitalGain * taxRate;
+  // Récupération CCA à la vente : tout le CCA réclamé est ré-imposé (au taux marginal complet)
+  // Estimation simplifiée : CCA cumulée sur N années
+  let totalCCA = 0;
+  if (a.useCCA) {
+    let ucc = buildingValue;
+    for (let y = 1; y <= horizonYears; y++) {
+      const ccaYear = (y === 1) ? ucc * 0.04 * 0.5 : ucc * 0.04;
+      totalCCA += ccaYear;
+      ucc -= ccaYear;
+    }
+  }
+  const ccaRecaptureTax = totalCCA * taxRate;
+  // Total impôt à la vente
+  const totalSaleTax = capitalGainTax + ccaRecaptureTax;
+  return {
+    taxRate: taxRate * 100,
+    interestPaidYear1: interestY1,
+    ccaYear1: ccaY1,
+    taxableIncome,
+    annualIncomeTax,
+    annualAfterTaxCashFlow,
+    monthlyAfterTaxCashFlow,
+    capitalGain,
+    capitalGainTax,
+    totalCCA,
+    ccaRecaptureTax,
+    totalSaleTax,
+    horizonYears,
+    futureValue
+  };
 }
 
 // Calcul de paiement hypothécaire — méthode canadienne (composition semi-annuelle)
@@ -2722,6 +2802,7 @@ function renderRealEstateEdit() {
         <h1 class="serene-hero-h1" style="margin:4px 0 0">${a.id ? (esc(a.name) || t("re_add")) : t("re_add")}</h1>
       </div>
       <div style="display:flex;gap:8px;flex-wrap:wrap">
+        ${a.id ? `<button class="btn btn-secondary" onclick="reExportPDF()">${icon("download", 14)} ${t("re_export_pdf")}</button>` : ``}
         ${a.id ? `<button class="btn re-btn-danger" onclick="reDelete('${a.id}')">${icon("trash", 14)} ${t("re_delete")}</button>` : ``}
         <button class="btn btn-primary" onclick="reSave()">${icon("check", 14)} ${t("re_save")}</button>
       </div>
@@ -2898,6 +2979,40 @@ function renderRealEstateEdit() {
               <input type="number" inputmode="decimal" min="3" max="30" step="any" value="${a.mrbTargetExcellent ?? 10}" oninput="reCurrent.mrbTargetExcellent=Math.min(30,Math.max(3,Number(this.value)||10));reRefresh()">
               <small class="re-hint">${t("re_field_mrb_excellent_hint")}</small>
             </label>
+          </div>
+        </section>
+
+        <section class="re-block re-block--fiscal">
+          <h3 class="re-block__title">${icon("receipt", 16)} <span>${t("re_section_fiscal")}</span></h3>
+          <div class="re-fields">
+            <label class="re-checkbox re-field--wide">
+              <input type="checkbox" ${a.fiscalEnabled ? "checked" : ""} onchange="reCurrent.fiscalEnabled=this.checked;renderPage()">
+              <span>${t("re_field_fiscal_enable")}${reTip("re_tip_fiscal_enable")}</span>
+            </label>
+            ${a.fiscalEnabled ? `
+              <label class="re-field">
+                <div class="re-field__head"><span>${t("re_field_marginal_tax")}${reTip("re_tip_marginal_tax")}</span></div>
+                <div class="re-input-suffix">
+                  <input type="number" inputmode="decimal" min="0" max="60" step="any" value="${a.marginalTaxRate ?? 37.12}" oninput="reCurrent.marginalTaxRate=Math.min(60,Math.max(0,Number(this.value)||0));reRefresh()">
+                  <span class="re-input-suffix__symbol">%</span>
+                </div>
+                <small class="re-hint">${t("re_field_marginal_tax_hint")}</small>
+              </label>
+              <label class="re-checkbox re-field--wide">
+                <input type="checkbox" ${a.useCCA ? "checked" : ""} onchange="reCurrent.useCCA=this.checked;renderPage()">
+                <span>${t("re_field_use_cca")}${reTip("re_tip_cca")}</span>
+              </label>
+              ${a.useCCA ? `
+                <label class="re-field re-field--wide">
+                  <div class="re-field__head"><span>${t("re_field_building_portion")}${reTip("re_tip_building_portion")}</span></div>
+                  <div class="re-input-suffix">
+                    <input type="number" inputmode="decimal" min="0" max="100" step="any" value="${a.buildingPortionPercent ?? 80}" oninput="reCurrent.buildingPortionPercent=Math.min(100,Math.max(0,Number(this.value)||0));reRefresh()">
+                    <span class="re-input-suffix__symbol">%</span>
+                  </div>
+                  <small class="re-hint">${t("re_field_building_portion_hint")}</small>
+                </label>
+              ` : ""}
+            ` : ""}
           </div>
         </section>
 
@@ -3269,12 +3384,70 @@ function renderRealEstateResults(a) {
 
       <div id="re-projection">${renderRealEstateProjection(a, reProjectionYears)}</div>
 
+      ${a.fiscalEnabled ? renderFiscalImpactCard(a, m, reProjectionYears) : ""}
+
       <div id="re-projection-chart-wrap" class="re-projection-chart-wrap">
         <div class="re-projection-chart__title">${t("re_chart_title")}</div>
         <canvas id="re-projection-chart" height="220"></canvas>
       </div>
 
       ${renderProjectionTable(a, reProjectionYears)}
+    </div>
+  `;
+}
+
+// Carte "Impact fiscal" — visible seulement si fiscalEnabled = true
+function renderFiscalImpactCard(a, m, horizon) {
+  const f = reFiscalImpact(a, m, horizon);
+  if (!f) return "";
+  const atcfClass = f.monthlyAfterTaxCashFlow >= 0 ? "pos" : "neg";
+  return `
+    <div class="re-fiscal-card">
+      <div class="re-fiscal-card__title">${icon("receipt", 14)} ${t("re_fiscal_impact")}</div>
+      <div class="re-fiscal-card__hint">${t("re_fiscal_disclaimer")}</div>
+
+      <div class="re-metric-row">
+        <div class="re-metric">
+          <div class="re-metric__label">${t("re_fiscal_after_tax_cf")}${reTip("re_tip_after_tax_cf")}</div>
+          <div class="re-metric__value re-metric__value--big re-metric__value--${atcfClass}">${fmtMoney(f.monthlyAfterTaxCashFlow)}<span class="re-metric__suffix">${t("re_metric_per_month")}</span></div>
+          <div class="re-metric__sub">${fmtMoney(f.annualAfterTaxCashFlow)}${t("re_metric_per_year")}</div>
+        </div>
+        <div class="re-metric">
+          <div class="re-metric__label">${t("re_fiscal_annual_tax")}${reTip("re_tip_annual_tax")}</div>
+          <div class="re-metric__value">${fmtMoney(f.annualIncomeTax)}${t("re_metric_per_year")}</div>
+        </div>
+      </div>
+
+      <details class="re-cf-breakdown">
+        <summary class="re-cf-breakdown__summary">
+          <span>${t("re_fiscal_see_detail")}</span>
+          <span class="re-verdict-details__chevron">▾</span>
+        </summary>
+        <div class="re-cf-breakdown__body">
+          <div class="re-cf-row"><span class="re-cf-row__label">${t("re_fiscal_taxable_income")}</span><span class="re-cf-row__value">${fmtMoney(f.taxableIncome)}/an</span></div>
+          <div class="re-cf-row"><span class="re-cf-row__label">${t("re_fiscal_interest_y1")}</span><span class="re-cf-row__value">${fmtMoney(f.interestPaidYear1)}/an</span></div>
+          ${a.useCCA ? `<div class="re-cf-row"><span class="re-cf-row__label">${t("re_fiscal_cca_y1")}</span><span class="re-cf-row__value">${fmtMoney(f.ccaYear1)}/an</span></div>` : ""}
+          <div class="re-cf-row"><span class="re-cf-row__label">${t("re_fiscal_tax_rate")}</span><span class="re-cf-row__value">${f.taxRate.toFixed(2)}%</span></div>
+          <div class="re-cf-row re-cf-row--total">
+            <span class="re-cf-row__label">${t("re_fiscal_annual_tax")}</span>
+            <span class="re-cf-row__value">${fmtMoney(f.annualIncomeTax)}</span>
+          </div>
+        </div>
+      </details>
+
+      <div class="re-fiscal-card__divider">${t("re_fiscal_sale_horizon").replace("{n}", f.horizonYears)}</div>
+
+      <div class="re-metric-row">
+        <div class="re-metric">
+          <div class="re-metric__label">${t("re_fiscal_capital_gain")}${reTip("re_tip_capital_gain")}</div>
+          <div class="re-metric__value">${fmtMoney(f.capitalGain)}</div>
+        </div>
+        <div class="re-metric">
+          <div class="re-metric__label">${t("re_fiscal_capital_gain_tax")}</div>
+          <div class="re-metric__value re-metric__value--neg">${fmtMoney(f.capitalGainTax)}</div>
+          ${a.useCCA && f.ccaRecaptureTax > 0 ? `<div class="re-metric__sub">+ ${fmtMoney(f.ccaRecaptureTax)} ${t("re_fiscal_cca_recapture")}</div>` : ""}
+        </div>
+      </div>
     </div>
   `;
 }
@@ -3783,4 +3956,28 @@ async function reDelete(id) {
   if (!confirm(t("re_confirm_delete"))) return;
   await db.collection("realEstateAnalyses").doc(id).delete();
   reBackToList();
+}
+
+// Exporte la fiche en PDF via la boîte d'impression du navigateur
+// (l'utilisateur choisit "Enregistrer en PDF" dans la destination)
+function reExportPDF() {
+  // Marque le body pour activer le mode impression personnalisé
+  document.body.classList.add("re-printing");
+  // S'assure que tous les <details> du panneau résultats sont ouverts pour l'impression
+  document.querySelectorAll(".re-results details").forEach(d => {
+    d.dataset.wasOpen = d.open ? "1" : "0";
+    d.open = true;
+  });
+  // Lance l'impression
+  setTimeout(() => {
+    window.print();
+    // Nettoyage après impression
+    setTimeout(() => {
+      document.body.classList.remove("re-printing");
+      document.querySelectorAll(".re-results details").forEach(d => {
+        if (d.dataset.wasOpen === "0") d.open = false;
+        delete d.dataset.wasOpen;
+      });
+    }, 100);
+  }, 50);
 }

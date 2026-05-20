@@ -3699,6 +3699,51 @@ h1, h2, h3, h4 {
 .re-block--units    .re-block__title svg  { color: #14b8a6; }
 .re-block--notes     { border-left-color: var(--text3); }
 .re-block--notes    .re-block__title svg  { color: var(--text3); }
+.re-block--fiscal    { border-left-color: #f59e0b; }
+.re-block--fiscal   .re-block__title svg  { color: #f59e0b; }
+
+/* Carte impact fiscal */
+.re-fiscal-card {
+  background: var(--surface);
+  border: 1px solid var(--border-strong);
+  border-left: 4px solid #f59e0b;
+  border-radius: var(--radius-lg);
+  padding: var(--sp-4);
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-3);
+  margin-top: var(--sp-2);
+}
+.re-fiscal-card__title {
+  font-size: var(--fs-xs);
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.7px;
+  color: #f59e0b;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.re-fiscal-card__hint {
+  font-size: 11px;
+  color: var(--text3);
+  font-style: italic;
+  line-height: 1.4;
+}
+.re-fiscal-card__divider {
+  font-size: 10px;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.6px;
+  color: var(--text3);
+  text-align: center;
+  padding: var(--sp-2) 0;
+  border-top: 1px dashed var(--border);
+  border-bottom: 1px dashed var(--border);
+  background: var(--surface2);
+  border-radius: var(--radius-sm);
+  margin: 4px 0;
+}
 
 .re-fields {
   display: grid;
@@ -4886,3 +4931,136 @@ h1, h2, h3, h4 {
   .re-block { padding: var(--sp-4); }
   .re-units { grid-template-columns: 1fr; }
 }
+
+/* ═══════════════════════════════════════════════════════════════
+   IMPRESSION / EXPORT PDF — vue analyse immobilière
+   ═══════════════════════════════════════════════════════════════ */
+@media print {
+  /* Cache tout le shell de l'app */
+  .sidebar,
+  .topbar,
+  #sidebar-toggle-btn,
+  .serene-hero-header > div:last-child,  /* boutons d'action */
+  .serene-hero-header button,
+  .re-card__select,
+  .modal,
+  .toast,
+  .re-toast,
+  .re-tip,
+  .re-projection__years,
+  details summary { display: none !important; }
+
+  /* Force l'ouverture de tous les details pour que tout soit visible */
+  details { display: block !important; }
+  details > *:not(summary) { display: block !important; }
+
+  /* Fond blanc, texte noir, pas d'ombres */
+  body, .app-wrap, .main, .page, .serene-page {
+    background: white !important;
+    color: black !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    max-width: 100% !important;
+  }
+  .main { margin-left: 0 !important; padding: 0 !important; }
+
+  /* Une seule colonne en impression */
+  .re-grid {
+    grid-template-columns: 1fr !important;
+    gap: 16px !important;
+  }
+  .re-results__sticky {
+    position: static !important;
+    max-height: none !important;
+    overflow: visible !important;
+    box-shadow: none !important;
+    border: 1px solid #ccc !important;
+  }
+
+  /* Sections compactes pour impression */
+  .re-block {
+    page-break-inside: avoid;
+    border-left-width: 3px !important;
+    padding: 12px !important;
+    margin-bottom: 12px !important;
+    box-shadow: none !important;
+  }
+  .re-block__title {
+    font-size: 13px !important;
+    padding-bottom: 6px !important;
+    margin-bottom: 8px !important;
+  }
+  .re-fields { gap: 8px !important; }
+
+  /* Cartes résultats : pas de breaks au milieu */
+  .re-verdict-big,
+  .re-fiscal-card,
+  .re-suggested,
+  .re-metric,
+  .re-projection,
+  .re-projection-chart-wrap,
+  .re-table-wrap {
+    page-break-inside: avoid;
+    box-shadow: none !important;
+  }
+
+  /* Titres avec une nouvelle page si nécessaire */
+  .re-block--projection,
+  .re-block--units,
+  .re-block--fiscal,
+  .re-block--closing {
+    page-break-before: auto;
+  }
+
+  /* Tableau année par année : prend toute la largeur */
+  .re-table-wrap__scroll { overflow: visible !important; }
+  .re-table { font-size: 10px !important; }
+
+  /* Cache les inputs et boutons d'édition */
+  input[type="number"],
+  input[type="text"],
+  select,
+  textarea {
+    border: none !important;
+    background: transparent !important;
+    padding: 0 !important;
+    font-weight: 600 !important;
+    color: black !important;
+  }
+  .re-input-suffix {
+    border: none !important;
+    padding: 0 !important;
+  }
+  .re-input-suffix__symbol {
+    border: none !important;
+    padding: 0 4px 0 0 !important;
+  }
+  .re-toggle, .re-toggle__btn { display: none !important; }
+  .re-field__head .re-toggle { display: none !important; }
+
+  /* Force chart en taille raisonnable */
+  canvas { max-height: 250px !important; }
+
+  /* Header impression */
+  .serene-hero-header {
+    margin-bottom: 16px !important;
+    padding-bottom: 8px !important;
+    border-bottom: 2px solid #333 !important;
+  }
+  .serene-hero-h1 { font-size: 20px !important; }
+
+  /* Lien retour caché */
+  .btn-link { display: none !important; }
+
+  /* Empêche les liens de prendre toute la couleur */
+  a, a:visited { color: black !important; text-decoration: none !important; }
+
+  /* Format page A4 portrait, marges raisonnables */
+  @page {
+    size: A4 portrait;
+    margin: 1.5cm 1cm;
+  }
+}
+
+/* Mode impression actif (déclenché par JS pour pré-ouvrir les details) */
+body.re-printing details { open: true; }

@@ -308,6 +308,7 @@ const TRANSLATIONS = {
   re_confirm_delete:     { fr: "Supprimer cette analyse?",     es: "¿Eliminar este análisis?" },
   re_save_need_name:     { fr: "Donne un nom à ton analyse (ex: Triplex St-Jean-Baptiste).", es: "Dale un nombre a tu análisis (ej: Triplex St-Jean-Baptiste)." },
   re_save_toast:         { fr: "Analyse sauvegardée",          es: "Análisis guardado" },
+  re_export_pdf:         { fr: "Exporter PDF",                 es: "Exportar PDF" },
 
   // ── Prix d'offre suggéré ──────────────────────────
   re_suggested_title:    { fr: "Prix d'offre conseillé",       es: "Precio de oferta sugerido" },
@@ -438,6 +439,36 @@ const TRANSLATIONS = {
   re_cf_management:      { fr: "Gestion immobilière",          es: "Gestión inmobiliaria" },
   re_cf_mortgage:        { fr: "Paiement hypothécaire",        es: "Pago hipotecario" },
   re_cf_total:           { fr: "Cash flow net",                es: "Flujo de caja neto" },
+
+  // ── Fiscalité (estimation simplifiée) ─────────────
+  re_section_fiscal:     { fr: "Fiscalité (estimation)",       es: "Fiscalidad (estimación)" },
+  re_field_fiscal_enable:{ fr: "Calculer l'impact fiscal",     es: "Calcular el impacto fiscal" },
+  re_tip_fiscal_enable:  { fr: "Active des calculs fiscaux approximatifs : impôt sur revenus locatifs nets, déduction des intérêts hypothécaires, optionnellement CCA (amortissement bâtiment), et estimation du gain en capital à la vente.", es: "Activa cálculos fiscales aproximados." },
+  re_field_marginal_tax: { fr: "Taux marginal d'imposition (Qc+fédéral combiné)", es: "Tasa marginal combinada" },
+  re_tip_marginal_tax:   { fr: "Ton taux d'impôt marginal combiné (fédéral + provincial). Qc 2024 : ~28% sous 53k$, ~37% entre 53k$ et 106k$, ~46% entre 106k$ et 165k$, ~50%+ au-dessus de 246k$.", es: "Tu tasa marginal combinada." },
+  re_field_marginal_tax_hint:{ fr: "Défaut 37.12% (revenu moyen-supérieur). Ajuste selon ton revenu personnel.", es: "Predeterminado 37.12% (ingreso medio-alto)." },
+  re_field_use_cca:      { fr: "Réclamer la CCA (amortissement bâtiment)", es: "Reclamar CCA (amortización)" },
+  re_tip_cca:            { fr: "La déduction pour amortissement du capital (CCA, classe 1 = bâtiments 4% dégressif) réduit ton revenu imposable annuel, mais elle est RÉ-IMPOSÉE en totalité à la vente (récupération CCA). À utiliser stratégiquement. Consulte un comptable.", es: "La amortización reduce el impuesto anual pero se recupera al vender." },
+  re_field_building_portion:{ fr: "Portion bâtiment du prix d'achat", es: "Porción del edificio (vs terreno)" },
+  re_tip_building_portion:{ fr: "Seul le bâtiment (pas le terrain) est amortissable pour la CCA. En général 75-85% du prix d'achat correspond au bâtiment en milieu urbain.", es: "Solo el edificio (no el terreno) es amortizable." },
+  re_field_building_portion_hint:{ fr: "Typiquement 75-85% en ville, plus pour des terrains chers (Plateau, Vieux-Qc).", es: "Típicamente 75-85% en ciudad." },
+
+  re_fiscal_impact:      { fr: "Impact fiscal estimé",         es: "Impacto fiscal estimado" },
+  re_fiscal_disclaimer:  { fr: "Estimation simplifiée. Pour une analyse fiscale réelle, consulte un comptable.", es: "Estimación simplificada. Consulta un contador." },
+  re_fiscal_after_tax_cf:{ fr: "Cash flow APRÈS impôt",        es: "Flujo de caja DESPUÉS de impuestos" },
+  re_tip_after_tax_cf:   { fr: "Cash flow mensuel restant après avoir payé l'impôt sur le revenu locatif net (NOI − intérêts déductibles − CCA optionnelle).", es: "Flujo mensual neto después de impuestos sobre el ingreso locativo." },
+  re_fiscal_annual_tax:  { fr: "Impôt annuel sur loyers",     es: "Impuesto anual sobre alquileres" },
+  re_tip_annual_tax:     { fr: "Impôt approximatif payé annuellement sur ton revenu locatif net. = (NOI − intérêts hypothécaires − CCA si réclamée) × ton taux marginal.", es: "Impuesto anual sobre el ingreso locativo neto." },
+  re_fiscal_see_detail:  { fr: "Voir le détail du calcul fiscal", es: "Ver detalle del cálculo fiscal" },
+  re_fiscal_taxable_income:{ fr: "Revenu locatif imposable",  es: "Ingreso locativo imponible" },
+  re_fiscal_interest_y1: { fr: "Intérêts hypothécaires déduits (an 1)", es: "Intereses hipotecarios deducidos (año 1)" },
+  re_fiscal_cca_y1:      { fr: "CCA déduite (an 1, règle ½ an)", es: "CCA deducida (año 1)" },
+  re_fiscal_tax_rate:    { fr: "× Taux marginal",              es: "× Tasa marginal" },
+  re_fiscal_sale_horizon:{ fr: "À la vente (année {n})",       es: "Al vender (año {n})" },
+  re_fiscal_capital_gain:{ fr: "Gain en capital",              es: "Ganancia de capital" },
+  re_tip_capital_gain:   { fr: "Différence entre la valeur projetée à la vente et le prix d'achat. Au Canada, 50% du gain est imposable au taux marginal (depuis juin 2024, possiblement 67% au-dessus de 250k$ — consulte un fiscaliste).", es: "Diferencia entre valor proyectado y precio de compra. 50% gravable en Canadá." },
+  re_fiscal_capital_gain_tax:{ fr: "Impôt sur gain en capital", es: "Impuesto sobre ganancia de capital" },
+  re_fiscal_cca_recapture:{ fr: "récupération CCA",            es: "recuperación CCA" },
 };
 
 let uiLang = localStorage.getItem("finances-ui-lang") || "fr";
