@@ -4015,6 +4015,33 @@ h1, h2, h3, h4 {
   font-weight: 500;
   margin-left: 4px;
 }
+.re-freq-radio__duration {
+  margin-top: 6px;
+  font-size: 11px;
+  color: var(--text3);
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+.re-freq-radio__duration strong {
+  color: var(--text);
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+.re-freq-radio__savings {
+  display: inline-block;
+  background: var(--status-green-bg);
+  color: var(--status-green);
+  border: 1px solid var(--status-green-border);
+  border-radius: var(--radius-pill);
+  padding: 1px 7px;
+  font-size: 10px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+.re-freq-radio.is-active .re-freq-radio__duration { color: var(--text2); }
+.re-freq-radio.is-active .re-freq-radio__duration strong { color: var(--accent); }
 
 /* Toggle $ / % pour mise de fond */
 .re-field__head {

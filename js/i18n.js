@@ -249,6 +249,7 @@ const TRANSLATIONS = {
   re_freq_per_week:      { fr: "/ semaine",                     es: "/ semana" },
   re_freq_mo_short:      { fr: "/mois",                         es: "/mes" },
   re_freq_an_short:      { fr: "/an",                           es: "/año" },
+  re_freq_real_duration: { fr: "Durée réelle",                  es: "Duración real" },
   re_field_maint_pct_suffix:{ fr: "% des loyers",                es: "% alquileres" },
   re_field_vacancy_enable:{ fr: "Inclure",                      es: "Incluir" },
   re_field_vacancy_ignored:{ fr: "Vacance ignorée dans les calculs", es: "Vacancia ignorada en los cálculos" },

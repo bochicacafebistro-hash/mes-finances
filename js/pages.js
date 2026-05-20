@@ -3121,6 +3121,18 @@ function renderRealEstateEdit() {
   return h;
 }
 
+// Calcule la durée réelle d'amortissement en années pour un paiement périodique donné.
+// Utilise la composition semi-annuelle canadienne.
+function reEffectiveAmortYears(principal, periodicPmt, periodsPerYear, annualRatePct) {
+  if (!principal || principal <= 0 || !periodicPmt || periodicPmt <= 0) return 0;
+  const r = (Number(annualRatePct) || 0) / 100;
+  const i = Math.pow(1 + r / 2, 2 / periodsPerYear) - 1;
+  if (i === 0) return principal / (periodicPmt * periodsPerYear);
+  const factor = 1 - (principal * i) / periodicPmt;
+  if (factor <= 0) return Infinity;
+  return -Math.log(factor) / Math.log(1 + i) / periodsPerYear;
+}
+
 // Rendu des 3 options de fréquence de paiement hypothécaire en radio buttons
 function renderPaymentFrequencyRadios(a) {
   const downPayment = reEffectiveDownPayment(a);
@@ -3138,10 +3150,20 @@ function renderPaymentFrequencyRadios(a) {
   const biweeklyPmt = canadianMortgagePayment(principal, a.interestRate, a.amortYears, "biweekly_accel");
   const weeklyPmt = canadianMortgagePayment(principal, a.interestRate, a.amortYears, "weekly_accel");
   const current = a.paymentFrequency || "monthly";
+  // Durée RÉELLE d'amortissement pour chaque option (mensuel = amort tel quel, accéléré = plus court)
+  const yearsMonthly  = a.amortYears || 25;
+  const yearsBiweekly = reEffectiveAmortYears(principal, biweeklyPmt, 26, a.interestRate);
+  const yearsWeekly   = reEffectiveAmortYears(principal, weeklyPmt,   52, a.interestRate);
+  const fmtYears = (y) => (isFinite(y) && y > 0) ? y.toFixed(1) + " " + t("re_years") : "—";
+  const savedBiweekly = Math.max(0, yearsMonthly - yearsBiweekly);
+  const savedWeekly   = Math.max(0, yearsMonthly - yearsWeekly);
   const options = [
-    { value: "monthly",        label: t("re_freq_monthly"),  amount: monthlyPmt,  suffix: t("re_metric_per_month") },
-    { value: "biweekly_accel", label: t("re_freq_biweekly"), amount: biweeklyPmt, suffix: t("re_freq_per_biweek") },
-    { value: "weekly_accel",   label: t("re_freq_weekly"),   amount: weeklyPmt,   suffix: t("re_freq_per_week") }
+    { value: "monthly",        label: t("re_freq_monthly"),  amount: monthlyPmt,  suffix: t("re_metric_per_month"),
+      duration: fmtYears(yearsMonthly), badge: null },
+    { value: "biweekly_accel", label: t("re_freq_biweekly"), amount: biweeklyPmt, suffix: t("re_freq_per_biweek"),
+      duration: fmtYears(yearsBiweekly), badge: savedBiweekly > 0.1 ? `−${savedBiweekly.toFixed(1)} ${t("re_years")}` : null },
+    { value: "weekly_accel",   label: t("re_freq_weekly"),   amount: weeklyPmt,   suffix: t("re_freq_per_week"),
+      duration: fmtYears(yearsWeekly), badge: savedWeekly > 0.1 ? `−${savedWeekly.toFixed(1)} ${t("re_years")}` : null }
   ];
   return `
     <div class="re-freq-radios">
@@ -3151,6 +3173,10 @@ function renderPaymentFrequencyRadios(a) {
           <div class="re-freq-radio__content">
             <div class="re-freq-radio__label">${o.label}</div>
             <div class="re-freq-radio__amount">${fmtMoney(o.amount)}<span class="re-freq-radio__suffix">${o.suffix}</span></div>
+            <div class="re-freq-radio__duration">
+              ${t("re_freq_real_duration")}: <strong>${o.duration}</strong>
+              ${o.badge ? `<span class="re-freq-radio__savings">${o.badge}</span>` : ""}
+            </div>
           </div>
         </label>
       `).join("")}
