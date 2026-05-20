@@ -1966,11 +1966,13 @@ function reComputeSchlPremium(price, downPayment) {
   if (!price || price <= 0 || downPayment >= price) return 0;
   const baseLoan = price - downPayment;
   const dpRatio = downPayment / price;
+  // Tolérance epsilon pour éviter le drift IEEE 754 aux seuils exacts (20%, 15%, 10%, 5%)
+  const EPS = 1e-6;
   let rate = 0;
-  if (dpRatio >= 0.20) rate = 0;       // pas d'assurance requise
-  else if (dpRatio >= 0.15) rate = 0.028;  // 2.80%
-  else if (dpRatio >= 0.10) rate = 0.031;  // 3.10%
-  else if (dpRatio >= 0.05) rate = 0.040;  // 4.00%
+  if (dpRatio >= 0.20 - EPS) rate = 0;             // pas d'assurance requise
+  else if (dpRatio >= 0.15 - EPS) rate = 0.028;    // 2.80%
+  else if (dpRatio >= 0.10 - EPS) rate = 0.031;    // 3.10%
+  else if (dpRatio >= 0.05 - EPS) rate = 0.040;    // 4.00%
   else rate = 0; // < 5% : prêt assuré non disponible normalement
   return baseLoan * rate;
 }
@@ -2134,7 +2136,7 @@ function calculateRealEstateMetrics(a) {
   const purchasePriceNum = Number(a.purchasePrice) || 0;
   const dpRatio = purchasePriceNum > 0 ? downPayment / purchasePriceNum : 0;
   let schlPremium = 0;
-  if (dpRatio >= 0.05 && dpRatio < 0.20) {
+  if (dpRatio >= 0.05 - 1e-6 && dpRatio < 0.20 - 1e-6) {
     schlPremium = a.schlAuto !== false
       ? reComputeSchlPremium(purchasePriceNum, downPayment)
       : (Number(a.schlPremium) || 0);
@@ -2496,11 +2498,12 @@ function reSimulatePrice(a, targetMonthlyCashFlow) {
   }
   effectiveDpPct = Math.max(0, Math.min(100, effectiveDpPct));
 
-  // Taux SCHL selon le %, ajouté au principal
+  // Taux SCHL selon le %, ajouté au principal (epsilon pour éviter drift IEEE 754)
+  const EPS_PCT = 1e-4; // 0.0001% de tolérance
   let schlRate = 0;
-  if (effectiveDpPct < 20 && effectiveDpPct >= 15) schlRate = 0.028;
-  else if (effectiveDpPct < 15 && effectiveDpPct >= 10) schlRate = 0.031;
-  else if (effectiveDpPct < 10 && effectiveDpPct >= 5) schlRate = 0.040;
+  if (effectiveDpPct < 20 - EPS_PCT && effectiveDpPct >= 15 - EPS_PCT) schlRate = 0.028;
+  else if (effectiveDpPct < 15 - EPS_PCT && effectiveDpPct >= 10 - EPS_PCT) schlRate = 0.031;
+  else if (effectiveDpPct < 10 - EPS_PCT && effectiveDpPct >= 5 - EPS_PCT) schlRate = 0.040;
 
   // Facteur d'hypothèque annuel par $1 de principal (composition canadienne)
   const r = (Number(a.interestRate) || 0) / 100;
@@ -2708,18 +2711,27 @@ function projectRealEstate(a, years) {
 
   // Année par année : loyers et cash flow avec augmentation annuelle des loyers
   // Hypothèse : les charges fixes (taxes, assurances, services) suivent le même taux d'augmentation
-  // Le maintenance % et le management % restent constants, donc grandissent avec les loyers naturellement
   const fixedOpexY1 = base.municipalTax + base.schoolTax + base.insurance + base.servicesY;
+  // Vacance respecte le toggle vacancyEnabled
+  const vacancyPctProj = a.vacancyEnabled === false ? 0 : (Number(a.vacancyPercent) || 0);
+  // Maintenance respecte le mode choisi (% loyer / $/mois / $/an)
+  const maintMode = a.maintenanceMode || "percent";
+  const maintAmount = Number(a.maintenanceAmount) || 0;
+  const maintPctVal = Number(a.maintenancePercent) || 0;
   let cumGrossRent = 0;
   let cumNOI = 0;
   let cumCashFlow = 0;
   for (let y = 1; y <= years; y++) {
     const g = Math.pow(1 + rentRate, y - 1);
     const yGrossRent   = base.grossAnnualRent * g;
-    const yVacancyLoss = yGrossRent * ((Number(a.vacancyPercent) || 0) / 100);
+    const yVacancyLoss = yGrossRent * (vacancyPctProj / 100);
     const yEffIncome   = yGrossRent - yVacancyLoss;
     const yFixedOpex   = fixedOpexY1 * g;
-    const yMaintenance = yGrossRent * ((Number(a.maintenancePercent) || 0) / 100);
+    // Maintenance selon le mode : % suit la croissance, montant fixe est indexé à l'inflation aussi
+    let yMaintenance;
+    if (maintMode === "monthly") yMaintenance = maintAmount * 12 * g;
+    else if (maintMode === "annual") yMaintenance = maintAmount * g;
+    else yMaintenance = yGrossRent * (maintPctVal / 100);
     const yManagement  = yEffIncome * ((Number(a.managementPercent) || 0) / 100);
     const yOpex = yFixedOpex + yMaintenance + yManagement;
     const yNOI  = yEffIncome - yOpex;
@@ -3257,7 +3269,7 @@ function renderPaymentFrequencyRadios(a) {
   const dpRatio = purchasePriceNum > 0 ? downPayment / purchasePriceNum : 0;
   const baseLoan = Math.max(0, purchasePriceNum - downPayment);
   let schlPremium = 0;
-  if (dpRatio >= 0.05 && dpRatio < 0.20) {
+  if (dpRatio >= 0.05 - 1e-6 && dpRatio < 0.20 - 1e-6) {
     schlPremium = a.schlAuto !== false
       ? reComputeSchlPremium(purchasePriceNum, downPayment)
       : (Number(a.schlPremium) || 0);
@@ -3310,7 +3322,7 @@ function renderClosingCostsFields(a) {
   const currentWelcomeTax = a.welcomeTaxAuto !== false ? autoWelcomeTax : (Number(a.welcomeTax) || 0);
   const autoSchl = reComputeSchlPremium(price, dp);
   const currentSchl = a.schlAuto !== false ? autoSchl : (Number(a.schlPremium) || 0);
-  const schlApplicable = price > 0 && dpPct < 20 && dpPct >= 5;
+  const schlApplicable = price > 0 && dpPct < 20 - 1e-4 && dpPct >= 5 - 1e-4;
   const totalClosing = currentWelcomeTax + (Number(a.notaryFees) || 0) + (Number(a.inspectionFees) || 0) + (Number(a.otherClosingFees) || 0);
   return `
     <div class="re-fields">
@@ -3921,15 +3933,24 @@ function renderProjectionTable(a, years) {
   const fixedOpexY1 = base.municipalTax + base.schoolTax + base.insurance + base.servicesY;
   const price = Number(a.purchasePrice) || 0;
 
+  // Vacance respecte le toggle vacancyEnabled (sinon ignorée)
+  const vacancyPctTbl = a.vacancyEnabled === false ? 0 : (Number(a.vacancyPercent) || 0);
+  // Maintenance respecte le mode choisi
+  const maintModeTbl = a.maintenanceMode || "percent";
+  const maintAmountTbl = Number(a.maintenanceAmount) || 0;
+  const maintPctTbl = Number(a.maintenancePercent) || 0;
   const rows = [];
   let cumCashFlow = 0;
   for (let y = 1; y <= years; y++) {
     const g = Math.pow(1 + rentRate, y - 1);
     const yGrossRent   = base.grossAnnualRent * g;
-    const yVacancyLoss = yGrossRent * ((Number(a.vacancyPercent) || 0) / 100);
+    const yVacancyLoss = yGrossRent * (vacancyPctTbl / 100);
     const yEffIncome   = yGrossRent - yVacancyLoss;
     const yFixedOpex   = fixedOpexY1 * g;
-    const yMaintenance = yGrossRent * ((Number(a.maintenancePercent) || 0) / 100);
+    let yMaintenance;
+    if (maintModeTbl === "monthly") yMaintenance = maintAmountTbl * 12 * g;
+    else if (maintModeTbl === "annual") yMaintenance = maintAmountTbl * g;
+    else yMaintenance = yGrossRent * (maintPctTbl / 100);
     const yManagement  = yEffIncome * ((Number(a.managementPercent) || 0) / 100);
     const yOpex = yFixedOpex + yMaintenance + yManagement;
     const yNOI  = yEffIncome - yOpex;
@@ -4064,17 +4085,18 @@ function reEdit(id) {
   const a = realEstateAnalyses.find(x => x.id === id);
   if (!a) return;
   reCurrent = JSON.parse(JSON.stringify(a)); // clone profond pour ne pas muter Firestore en live
-  // Migration douce : appliquer les valeurs par défaut pour les champs ajoutés après la sauvegarde initiale
+  // ÉTAPE 1 : migrations legacy AVANT d'appliquer les défauts (sinon les défauts écrasent)
+  // services (ancien champ unique) → electricity (nouveau champ décomposé)
+  if (reCurrent.services !== undefined && reCurrent.electricity === undefined) {
+    reCurrent.electricity = reCurrent.services;
+    delete reCurrent.services;
+  }
+  // ÉTAPE 2 : appliquer les valeurs par défaut pour les champs ajoutés après la sauvegarde initiale
   const defaults = reNewAnalysis();
   for (const key of Object.keys(defaults)) {
     if (reCurrent[key] === undefined || reCurrent[key] === null) {
       reCurrent[key] = defaults[key];
     }
-  }
-  // Migration du champ legacy "services" → électricité (compatibilité)
-  if (reCurrent.services !== undefined && reCurrent.electricity === undefined) {
-    reCurrent.electricity = reCurrent.services;
-    delete reCurrent.services;
   }
   // Assurer que chaque unité a les nouveaux champs
   reCurrent.units = (reCurrent.units || []).map(u => ({
