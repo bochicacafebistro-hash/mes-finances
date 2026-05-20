@@ -2535,17 +2535,22 @@ function projectRealEstate(a, years) {
 
 function renderRealEstatePage() {
   if (reMode === "edit" && reCurrent) return renderRealEstateEdit();
+  if (reMode === "compare") return renderRealEstateCompare();
   return renderRealEstateList();
 }
 
 function renderRealEstateList() {
+  const selectedCount = reCompareIds.length;
   let h = `<div class="serene-page">
     <div class="serene-hero-header">
       <div>
         <div class="kicker" style="margin-bottom:10px">${t("re_subtitle").toUpperCase()}</div>
         <h1 class="serene-hero-h1" style="margin:0">${t("re_title")}</h1>
       </div>
-      <button class="btn-pill" onclick="reNew()">${icon("plus", 14)} ${t("re_add")}</button>
+      <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">
+        ${selectedCount >= 2 ? `<button class="btn-pill re-compare-btn" onclick="reStartCompare()">${icon("clipboard", 14)} ${t("re_compare").replace("{n}", selectedCount)}</button>` : ""}
+        <button class="btn-pill" onclick="reNew()">${icon("plus", 14)} ${t("re_add")}</button>
+      </div>
     </div>`;
   if (!realEstateAnalyses.length) {
     h += `<div class="empty">
@@ -2554,42 +2559,158 @@ function renderRealEstateList() {
     </div></div>`;
     return h;
   }
+  if (realEstateAnalyses.length >= 2) {
+    h += `<div class="re-compare-hint">${t("re_compare_hint")}</div>`;
+  }
   h += `<div class="re-list">`;
   for (const a of realEstateAnalyses) {
     const m = calculateRealEstateMetrics(a);
     const cf = m.monthlyCashFlow;
     const cfClass = cf >= 0 ? "pos" : "neg";
-    h += `<div class="re-card" onclick="reEdit('${a.id}')">
-      <div class="re-card__head">
-        <div class="re-card__icon">${icon("home", 20)}</div>
-        <div class="re-card__title">
-          <div class="re-card__name">${esc(a.name || "(Sans nom)")}</div>
-          <div class="re-card__addr">${esc(a.address || "")}</div>
+    const isSelected = reCompareIds.includes(a.id);
+    h += `<div class="re-card ${isSelected ? "re-card--selected" : ""}">
+      <label class="re-card__select" onclick="event.stopPropagation()" title="${t("re_compare_select")}">
+        <input type="checkbox" ${isSelected ? "checked" : ""} onchange="reToggleCompare('${a.id}')">
+      </label>
+      <div class="re-card__body" onclick="reEdit('${a.id}')">
+        <div class="re-card__head">
+          <div class="re-card__icon">${icon("home", 20)}</div>
+          <div class="re-card__title">
+            <div class="re-card__name">${esc(a.name || "(Sans nom)")}</div>
+            <div class="re-card__addr">${esc(a.address || "")}</div>
+          </div>
+          <div class="re-verdict re-verdict--${m.verdict}">${t("re_verdict_" + m.verdict)}</div>
         </div>
-        <div class="re-verdict re-verdict--${m.verdict}">${t("re_verdict_" + m.verdict)}</div>
-      </div>
-      <div class="re-card__stats">
-        <div class="re-stat">
-          <div class="re-stat__label">${t("re_metric_cashflow")}</div>
-          <div class="re-stat__value re-stat__value--${cfClass}">${fmtMoney(cf)}<span class="re-stat__suffix">${t("re_metric_per_month")}</span></div>
-        </div>
-        <div class="re-stat">
-          <div class="re-stat__label">${t("re_metric_cap_rate")}</div>
-          <div class="re-stat__value">${m.capRate.toFixed(2)}%</div>
-        </div>
-        <div class="re-stat">
-          <div class="re-stat__label">${t("re_metric_mrb")}</div>
-          <div class="re-stat__value">${m.grossAnnualRent > 0 ? m.mrb.toFixed(1) : "—"}</div>
-        </div>
-        <div class="re-stat">
-          <div class="re-stat__label">${t("re_field_price")}</div>
-          <div class="re-stat__value">${fmtMoney(a.purchasePrice)}</div>
+        <div class="re-card__stats">
+          <div class="re-stat">
+            <div class="re-stat__label">${t("re_metric_cashflow")}</div>
+            <div class="re-stat__value re-stat__value--${cfClass}">${fmtMoney(cf)}<span class="re-stat__suffix">${t("re_metric_per_month")}</span></div>
+          </div>
+          <div class="re-stat">
+            <div class="re-stat__label">${t("re_metric_cap_rate")}</div>
+            <div class="re-stat__value">${m.capRate.toFixed(2)}%</div>
+          </div>
+          <div class="re-stat">
+            <div class="re-stat__label">${t("re_metric_mrb")}</div>
+            <div class="re-stat__value">${m.grossAnnualRent > 0 ? m.mrb.toFixed(1) : "—"}</div>
+          </div>
+          <div class="re-stat">
+            <div class="re-stat__label">${t("re_field_price")}</div>
+            <div class="re-stat__value">${fmtMoney(a.purchasePrice)}</div>
+          </div>
         </div>
       </div>
     </div>`;
   }
   h += `</div></div>`;
   return h;
+}
+
+function reToggleCompare(id) {
+  const idx = reCompareIds.indexOf(id);
+  if (idx >= 0) reCompareIds.splice(idx, 1);
+  else reCompareIds.push(id);
+  renderPage();
+}
+
+function reStartCompare() {
+  if (reCompareIds.length < 2) return;
+  reMode = "compare";
+  renderPage();
+}
+
+function reExitCompare() {
+  reMode = "list";
+  renderPage();
+}
+
+function reClearCompare() {
+  reCompareIds = [];
+  renderPage();
+}
+
+// Vue de comparaison côte à côte
+function renderRealEstateCompare() {
+  const items = reCompareIds
+    .map(id => realEstateAnalyses.find(x => x.id === id))
+    .filter(Boolean);
+  if (items.length < 2) {
+    reMode = "list";
+    return renderRealEstateList();
+  }
+  const data = items.map(a => {
+    const m = calculateRealEstateMetrics(a);
+    const p = projectRealEstate(a, 10);
+    return { a, m, p };
+  });
+
+  // Pour chaque métrique, trouve le best/worst pour highlighting
+  const findBest = (key, dir = "max", source = "m") =>
+    data.reduce((best, d, i) => {
+      const v = d[source][key];
+      if (v === null || v === undefined || isNaN(v)) return best;
+      if (best === null) return { i, v };
+      return (dir === "max" ? v > best.v : v < best.v) ? { i, v } : best;
+    }, null);
+  const bestCashFlow = findBest("monthlyCashFlow", "max");
+  const bestCapRate  = findBest("capRate", "max");
+  const bestMrb      = findBest("mrb", "min");
+  const bestDscr     = findBest("dscr", "max");
+  const bestCoc      = findBest("cashOnCash", "max");
+  const bestBreak    = findBest("breakEvenOccupancy", "min");
+  const bestEquity10 = findBest("equity", "max", "p");
+  const bestCagr     = findBest("annualizedReturn", "max", "p");
+
+  const cell = (val, bestIdx, i, fmt = (v) => v) => {
+    const isBest = bestIdx && bestIdx.i === i;
+    return `<td class="re-cmp__cell ${isBest ? "re-cmp__cell--best" : ""}">${fmt(val)}</td>`;
+  };
+
+  return `<div class="serene-page">
+    <div class="serene-hero-header">
+      <div>
+        <button class="btn-link" onclick="reExitCompare()">${t("re_back_to_list")}</button>
+        <h1 class="serene-hero-h1" style="margin:4px 0 0">${t("re_compare_title")}</h1>
+      </div>
+      <button class="btn-pill" onclick="reClearCompare()">${icon("trash", 14)} ${t("re_compare_clear")}</button>
+    </div>
+
+    <div class="re-cmp-wrap">
+      <table class="re-cmp">
+        <thead>
+          <tr>
+            <th class="re-cmp__header re-cmp__header--label">${t("re_compare_metric")}</th>
+            ${data.map(d => `
+              <th class="re-cmp__header">
+                <div class="re-cmp__name">${esc(d.a.name || "(Sans nom)")}</div>
+                <div class="re-cmp__addr">${esc(d.a.address || "")}</div>
+                <div class="re-verdict re-verdict--${d.m.verdict}" style="margin-top:6px">${t("re_verdict_" + d.m.verdict)}</div>
+              </th>
+            `).join("")}
+          </tr>
+        </thead>
+        <tbody>
+          <tr><td class="re-cmp__label">${t("re_field_price")}</td>${data.map((d, i) => cell(d.a.purchasePrice, null, i, fmtMoney)).join("")}</tr>
+          <tr><td class="re-cmp__label">${t("re_field_downpayment")}</td>${data.map((d, i) => cell(d.m.downPayment, null, i, fmtMoney)).join("")}</tr>
+          <tr><td class="re-cmp__label">${t("re_metric_gross_rent")} (/mois)</td>${data.map((d, i) => cell(d.m.grossMonthlyRent, null, i, fmtMoney)).join("")}</tr>
+          <tr><td class="re-cmp__label">${t("re_metric_mortgage_pmt")} (/mois)</td>${data.map((d, i) => cell(d.m.monthlyPmt, null, i, fmtMoney)).join("")}</tr>
+          <tr class="re-cmp__row--key"><td class="re-cmp__label">${t("re_metric_cashflow")} (/mois)</td>${data.map((d, i) => cell(d.m.monthlyCashFlow, bestCashFlow, i, fmtMoney)).join("")}</tr>
+          <tr><td class="re-cmp__label">${t("re_metric_cap_rate")}</td>${data.map((d, i) => cell(d.m.capRate, bestCapRate, i, v => v.toFixed(2) + "%")).join("")}</tr>
+          <tr><td class="re-cmp__label">${t("re_metric_mrb")}</td>${data.map((d, i) => cell(d.m.mrb, bestMrb, i, v => (d.m.grossAnnualRent > 0 ? v.toFixed(1) : "—"))).join("")}</tr>
+          <tr><td class="re-cmp__label">${t("re_metric_dscr")}</td>${data.map((d, i) => cell(d.m.dscr, bestDscr, i, v => v === null ? "—" : v.toFixed(2))).join("")}</tr>
+          <tr><td class="re-cmp__label">${t("re_metric_coc")}</td>${data.map((d, i) => cell(d.m.cashOnCash, bestCoc, i, v => v === null ? "—" : v.toFixed(2) + "%")).join("")}</tr>
+          <tr><td class="re-cmp__label">${t("re_metric_breakeven")}</td>${data.map((d, i) => cell(d.m.breakEvenOccupancy, bestBreak, i, v => v === null ? "—" : v.toFixed(1) + "%")).join("")}</tr>
+          <tr><td class="re-cmp__label">${t("re_metric_cash_to_close")}</td>${data.map((d, i) => cell(d.m.cashToClose, null, i, fmtMoney)).join("")}</tr>
+          <tr class="re-cmp__divider"><td colspan="${data.length + 1}">${t("re_compare_projection_10")}</td></tr>
+          <tr><td class="re-cmp__label">${t("re_proj_future_value")}</td>${data.map((d, i) => cell(d.p.futureValue, null, i, fmtMoney)).join("")}</tr>
+          <tr class="re-cmp__row--key"><td class="re-cmp__label">${t("re_proj_equity")}</td>${data.map((d, i) => cell(d.p.equity, bestEquity10, i, fmtMoney)).join("")}</tr>
+          <tr><td class="re-cmp__label">${t("re_proj_cum_cashflow")}</td>${data.map((d, i) => cell(d.p.cumCashFlow, null, i, fmtMoney)).join("")}</tr>
+          <tr class="re-cmp__row--key"><td class="re-cmp__label">${t("re_proj_annualized_return")}</td>${data.map((d, i) => cell(d.p.annualizedReturn, bestCagr, i, v => v === null ? "—" : v.toFixed(2) + "% /an")).join("")}</tr>
+        </tbody>
+      </table>
+    </div>
+    <div class="re-cmp__legend">${t("re_compare_legend")}</div>
+  </div>`;
 }
 
 function renderRealEstateEdit() {
@@ -2609,8 +2730,8 @@ function renderRealEstateEdit() {
     <div class="re-grid">
       <div class="re-form">
 
-        <section class="re-block">
-          <h3 class="re-block__title">${t("re_section_property")}</h3>
+        <section class="re-block re-block--property">
+          <h3 class="re-block__title">${icon("home", 16)} <span>${t("re_section_property")}</span></h3>
           <div class="re-fields">
             <label class="re-field re-field--wide">
               <span>${t("re_field_name")}</span>
@@ -2621,8 +2742,13 @@ function renderRealEstateEdit() {
               <input type="text" value="${esc(a.address || "")}" oninput="reCurrent.address=this.value">
             </label>
             <label class="re-field">
-              <span>${t("re_field_price")}</span>
-              <input type="number" inputmode="numeric" min="0" step="any"value="${a.purchasePrice || ""}" oninput="reCurrent.purchasePrice=Math.max(0,Number(this.value)||0);reRefreshDownPaymentHint();reRefresh()">
+              <div class="re-field__head">
+                <span>${t("re_field_price")}</span>
+              </div>
+              <div class="re-input-suffix">
+                <span class="re-input-suffix__symbol re-input-suffix__symbol--left">$</span>
+                <input type="number" inputmode="numeric" min="0" step="any"value="${a.purchasePrice || ""}" oninput="reCurrent.purchasePrice=Math.max(0,Number(this.value)||0);reRefreshDownPaymentHint();reRefresh()">
+              </div>
             </label>
             <div class="re-field">
               <div class="re-field__head">
@@ -2654,8 +2780,8 @@ function renderRealEstateEdit() {
           </div>
         </section>
 
-        <section class="re-block">
-          <h3 class="re-block__title">${t("re_section_mortgage")}</h3>
+        <section class="re-block re-block--mortgage">
+          <h3 class="re-block__title">${icon("dollar-sign", 16)} <span>${t("re_section_mortgage")}</span></h3>
           <div class="re-fields">
             <label class="re-field">
               <span>${t("re_field_amort")}${reTip("re_tip_amort")}</span>
@@ -2676,8 +2802,8 @@ function renderRealEstateEdit() {
           </div>
         </section>
 
-        <section class="re-block">
-          <h3 class="re-block__title">${t("re_section_charges")}</h3>
+        <section class="re-block re-block--charges">
+          <h3 class="re-block__title">${icon("receipt", 16)} <span>${t("re_section_charges")}</span></h3>
           <div class="re-fields">
             <label class="re-field">
               <span>${t("re_field_municipal_tax")}</span>
@@ -2738,13 +2864,13 @@ function renderRealEstateEdit() {
           </div>
         </section>
 
-        <section class="re-block">
-          <h3 class="re-block__title">${t("re_section_closing")}</h3>
+        <section class="re-block re-block--closing">
+          <h3 class="re-block__title">${icon("shield-check", 16)} <span>${t("re_section_closing")}</span></h3>
           ${renderClosingCostsFields(a)}
         </section>
 
-        <section class="re-block">
-          <h3 class="re-block__title">${t("re_section_projection")}</h3>
+        <section class="re-block re-block--projection">
+          <h3 class="re-block__title">${icon("trending-up", 16)} <span>${t("re_section_projection")}</span></h3>
           <div class="re-fields">
             <label class="re-field">
               <span>${t("re_field_appreciation")}${reTip("re_tip_appreciation")}</span>
@@ -2775,8 +2901,8 @@ function renderRealEstateEdit() {
           </div>
         </section>
 
-        <section class="re-block">
-          <h3 class="re-block__title">${t("re_section_units")}
+        <section class="re-block re-block--units">
+          <h3 class="re-block__title">${icon("users", 16)} <span>${t("re_section_units")}</span>
             ${a.unitType === "custom" ? `<button class="btn-link" style="margin-left:auto" onclick="reAddUnit()">${t("re_unit_add")}</button>` : ""}
           </h3>
           <div class="re-units">
@@ -2812,8 +2938,8 @@ function renderRealEstateEdit() {
           </div>
         </section>
 
-        <section class="re-block">
-          <h3 class="re-block__title">${t("re_notes")}</h3>
+        <section class="re-block re-block--notes">
+          <h3 class="re-block__title">${icon("pencil", 16)} <span>${t("re_notes")}</span></h3>
           <textarea class="re-textarea" rows="3" oninput="reCurrent.notes=this.value">${esc(a.notes || "")}</textarea>
         </section>
       </div>
@@ -3059,6 +3185,7 @@ function renderRealEstateResults(a) {
           <div class="re-metric__label">${icon("home", 12)} ${t("re_metric_cost_to_live")}${reTip("re_tip_cost_to_live")}</div>
           <div class="re-metric__value re-metric__value--big re-metric__value--${costClass}">${m.costToLiveMonthly <= 0 ? "+" : ""}${fmtMoney(Math.abs(m.costToLiveMonthly))}<span class="re-metric__suffix">${t("re_metric_per_month")}</span></div>
           <div class="re-metric__sub">${m.costToLiveMonthly > 0 ? t("re_metric_cost_to_live_neg") : t("re_metric_cost_to_live_pos")}</div>
+          ${renderCashFlowBreakdown(m)}
         </div>
       ` : ""}
 
@@ -3066,6 +3193,7 @@ function renderRealEstateResults(a) {
         <div class="re-metric__label">${t("re_metric_cashflow")}${reTip("re_tip_cashflow")}</div>
         <div class="re-metric__value re-metric__value--big re-metric__value--${cfClass}">${fmtMoney(m.monthlyCashFlow)}<span class="re-metric__suffix">${t("re_metric_per_month")}</span></div>
         <div class="re-metric__sub">${fmtMoney(m.annualCashFlow)}${t("re_metric_per_year")}</div>
+        ${renderCashFlowBreakdown(m)}
       </div>
 
       <div class="re-metric-row">
@@ -3145,6 +3273,8 @@ function renderRealEstateResults(a) {
         <div class="re-projection-chart__title">${t("re_chart_title")}</div>
         <canvas id="re-projection-chart" height="220"></canvas>
       </div>
+
+      ${renderProjectionTable(a, reProjectionYears)}
     </div>
   `;
 }
@@ -3233,6 +3363,143 @@ function renderRealEstateProjection(a, years) {
       </div>
     </div>
   `;
+}
+
+// Tableau année par année : montre l'évolution détaillée sur la durée de projection
+function renderProjectionTable(a, years) {
+  years = Math.max(1, Math.min(30, Number(years) || 10));
+  const base = calculateRealEstateMetrics(a);
+  if (base.grossAnnualRent <= 0 && !base.hasOwnerOccupied) {
+    return ""; // pas pertinent sans loyers
+  }
+  const apprRate = (Number(a.appreciationPercent) || 0) / 100;
+  const rentRate = (Number(a.rentIncreasePercent) || 0) / 100;
+  const r = (Number(a.interestRate) || 0) / 100;
+  const n = (Number(a.amortYears) || 25) * 12;
+  const iMonthly = Math.pow(1 + r / 2, 2 / 12) - 1;
+  const PMT = base.monthlyPmt;
+  const fixedOpexY1 = base.municipalTax + base.schoolTax + base.insurance + base.servicesY;
+  const price = Number(a.purchasePrice) || 0;
+
+  const rows = [];
+  let cumCashFlow = 0;
+  for (let y = 1; y <= years; y++) {
+    const g = Math.pow(1 + rentRate, y - 1);
+    const yGrossRent   = base.grossAnnualRent * g;
+    const yVacancyLoss = yGrossRent * ((Number(a.vacancyPercent) || 0) / 100);
+    const yEffIncome   = yGrossRent - yVacancyLoss;
+    const yFixedOpex   = fixedOpexY1 * g;
+    const yMaintenance = yGrossRent * ((Number(a.maintenancePercent) || 0) / 100);
+    const yManagement  = yEffIncome * ((Number(a.managementPercent) || 0) / 100);
+    const yOpex = yFixedOpex + yMaintenance + yManagement;
+    const yNOI  = yEffIncome - yOpex;
+    const yMortgage = (y <= (a.amortYears || 25)) ? PMT * 12 : 0;
+    const yCashFlow = yNOI - yMortgage;
+    cumCashFlow += yCashFlow;
+    // Valeur de l'immeuble et solde hypothécaire à la fin de cette année
+    const yValue = price * Math.pow(1 + apprRate, y);
+    const k = Math.min(y, a.amortYears || 25) * 12;
+    let yBalance = 0;
+    if (y < (a.amortYears || 25)) {
+      yBalance = (iMonthly === 0) ? Math.max(0, base.principal - PMT * k)
+        : Math.max(0, base.principal * Math.pow(1 + iMonthly, k) - PMT * (Math.pow(1 + iMonthly, k) - 1) / iMonthly);
+    }
+    const yEquity = yValue - yBalance;
+    rows.push({ y, yGrossRent, yOpex, yMortgage, yCashFlow, cumCashFlow, yBalance, yValue, yEquity });
+  }
+  // Une ligne par année. Format compact pour tenir dans le panneau.
+  const tableRows = rows.map(r => `
+    <tr>
+      <td class="re-table__year">${r.y}</td>
+      <td>${fmtMoneyCompact(r.yGrossRent)}</td>
+      <td class="${r.yCashFlow >= 0 ? 're-table__pos' : 're-table__neg'}">${fmtMoneyCompact(r.yCashFlow)}</td>
+      <td>${fmtMoneyCompact(r.yValue)}</td>
+      <td class="re-table__equity">${fmtMoneyCompact(r.yEquity)}</td>
+    </tr>
+  `).join("");
+
+  return `
+    <details class="re-table-wrap">
+      <summary class="re-table-wrap__summary">
+        <span>${icon("clipboard", 12)} ${t("re_table_title")}</span>
+        <span class="re-verdict-details__chevron">▾</span>
+      </summary>
+      <div class="re-table-wrap__body">
+        <div class="re-table-wrap__scroll">
+          <table class="re-table">
+            <thead>
+              <tr>
+                <th>${t("re_table_year")}</th>
+                <th>${t("re_table_rent")}</th>
+                <th>${t("re_table_cashflow")}</th>
+                <th>${t("re_table_value")}</th>
+                <th>${t("re_table_equity")}</th>
+              </tr>
+            </thead>
+            <tbody>${tableRows}</tbody>
+          </table>
+        </div>
+        <small class="re-hint">${t("re_table_note")}</small>
+      </div>
+    </details>
+  `;
+}
+
+// Génère le détail mensuel du cash flow (loyers − toutes les dépenses − hypothèque)
+function renderCashFlowBreakdown(m) {
+  const rows = [];
+  // Revenus
+  if (m.grossMonthlyRent > 0) {
+    rows.push({ label: t("re_cf_gross_rent"), value: m.grossMonthlyRent, kind: "income" });
+  }
+  // Vacance (déduction)
+  if (m.vacancyLoss > 0) {
+    rows.push({ label: t("re_cf_vacancy"), value: -m.vacancyLoss / 12, kind: "expense" });
+  }
+  // Charges opérationnelles
+  if (m.municipalTax > 0) rows.push({ label: t("re_cf_municipal_tax"), value: -m.municipalTax / 12, kind: "expense" });
+  if (m.schoolTax > 0)    rows.push({ label: t("re_cf_school_tax"),    value: -m.schoolTax / 12,    kind: "expense" });
+  if (m.insurance > 0)    rows.push({ label: t("re_cf_insurance"),     value: -m.insurance / 12,    kind: "expense" });
+  if (m.electricityMo > 0) rows.push({ label: t("re_cf_electricity"),  value: -m.electricityMo,     kind: "expense" });
+  if (m.otherServiceMo > 0) rows.push({ label: t("re_cf_other_service"), value: -m.otherServiceMo,  kind: "expense" });
+  if (m.maintenance > 0)  rows.push({ label: t("re_cf_maintenance"),   value: -m.maintenance / 12,  kind: "expense" });
+  if (m.management > 0)   rows.push({ label: t("re_cf_management"),    value: -m.management / 12,   kind: "expense" });
+  // Service de la dette
+  if (m.monthlyPmt > 0) rows.push({ label: t("re_cf_mortgage"), value: -m.monthlyPmt, kind: "expense" });
+
+  if (rows.length === 0) return "";
+
+  return `
+    <details class="re-cf-breakdown">
+      <summary class="re-cf-breakdown__summary">
+        <span>${t("re_cf_see_detail")}</span>
+        <span class="re-verdict-details__chevron">▾</span>
+      </summary>
+      <div class="re-cf-breakdown__body">
+        ${rows.map(r => `
+          <div class="re-cf-row re-cf-row--${r.kind}">
+            <span class="re-cf-row__label">${r.label}</span>
+            <span class="re-cf-row__value">${r.value >= 0 ? '+' : '−'}${fmtMoney(Math.abs(r.value))}</span>
+          </div>
+        `).join("")}
+        <div class="re-cf-row re-cf-row--total">
+          <span class="re-cf-row__label">${t("re_cf_total")}</span>
+          <span class="re-cf-row__value ${m.monthlyCashFlow >= 0 ? 're-cf-row__value--pos' : 're-cf-row__value--neg'}">${m.monthlyCashFlow >= 0 ? '+' : '−'}${fmtMoney(Math.abs(m.monthlyCashFlow))}</span>
+        </div>
+      </div>
+    </details>
+  `;
+}
+
+// Format compact "$1,2M", "$45k", "$890" pour les tableaux denses
+function fmtMoneyCompact(n) {
+  const num = Number(n) || 0;
+  const abs = Math.abs(num);
+  const sign = num < 0 ? "−" : "";
+  if (abs >= 1e6) return `${sign}${(abs / 1e6).toFixed(2)} M$`;
+  if (abs >= 1e4) return `${sign}${(abs / 1e3).toFixed(0)} k$`;
+  if (abs >= 1e3) return `${sign}${(abs / 1e3).toFixed(1)} k$`;
+  return `${sign}${abs.toFixed(0)} $`;
 }
 
 function reSetProjectionYears(years) {

@@ -18,9 +18,10 @@ let realEstateAnalyses = []; // {
 // }
 
 // ── État UI de la page Achats immobilier ──────────────
-let reMode = "list";       // "list" | "edit"
+let reMode = "list";       // "list" | "edit" | "compare"
 let reCurrent = null;      // brouillon en cours (objet analyse non sauvegardé)
 let reProjectionYears = 10; // durée affichée dans le bloc Projection (modifiable)
+let reCompareIds = [];     // ids des analyses sélectionnées pour comparaison
 
 let isLoggedIn = false, isAdmin = false, pinBuffer = "", darkMode = false;
 let activePage = "dashboard";
