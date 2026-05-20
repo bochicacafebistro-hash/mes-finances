@@ -110,4 +110,9 @@ function renderPage() {
   if (activePage === "dashboard" && typeof initDashCharts === "function") {
     setTimeout(initDashCharts, 50);
   }
+  // Initialise le graphique de projection immobilier
+  if (activePage === "realestate" && typeof reMode !== "undefined" && reMode === "edit"
+      && typeof reDrawProjectionChart === "function" && typeof reCurrent !== "undefined" && reCurrent) {
+    setTimeout(() => reDrawProjectionChart(reCurrent), 50);
+  }
 }

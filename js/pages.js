@@ -1902,6 +1902,18 @@ function reNewAnalysis() {
     // Projection à long terme
     appreciationPercent: 5,    // appréciation annuelle du prix (% / an) — médiane historique Qc long terme
     rentIncreasePercent: 3.1,  // augmentation annuelle du loyer (% / an) — TAL Qc 2026 officiel
+    // Seuils MRB personnalisables (varient selon le marché local : centre urbain plus haut, banlieue plus bas)
+    mrbTargetGood: 14,         // MRB max pour qualifier de "bon" investissement (défaut Qc urbain)
+    mrbTargetExcellent: 10,    // MRB max pour qualifier d'"excellent" investissement
+    // Frais de clôture (ponctuels, payés à l'achat) — auto-calculés mais modifiables
+    welcomeTaxAuto: true,      // si true, recalculer auto selon prix
+    welcomeTax: 0,             // taxe de bienvenue Qc
+    notaryFees: 1500,          // honoraires notaire
+    inspectionFees: 600,       // inspection pré-achat
+    otherClosingFees: 0,       // autres (assurance titre, etc.)
+    // Assurance hypothécaire SCHL (si DP < 20%, ajoutée au prêt)
+    schlAuto: true,            // recalculer auto selon ratio DP
+    schlPremium: 0,            // prime SCHL en $
     unitType: "triplex",
     units: [
       { name: "Logement 1", rent: 0, utilitiesIncluded: true, ownerOccupied: false },
@@ -1910,6 +1922,45 @@ function reNewAnalysis() {
     ],
     notes: ""
   };
+}
+
+// Calcule la taxe de bienvenue (droits de mutation) au Québec selon le prix d'achat.
+// Grille générale Québec 2025 (la plupart des municipalités hors Montréal centre)
+function reComputeWelcomeTax(price) {
+  if (!price || price <= 0) return 0;
+  // Tranches Qc (2025) — ajustées annuellement à l'IPC, valeurs approx
+  const brackets = [
+    { upTo: 58900,   rate: 0.005 },  // 0.5%
+    { upTo: 294600,  rate: 0.010 },  // 1.0%
+    { upTo: 552300,  rate: 0.015 },  // 1.5%
+    { upTo: Infinity, rate: 0.020 }  // 2.0% (Montréal va jusqu'à 3-4% sur tranches supérieures)
+  ];
+  let tax = 0;
+  let prev = 0;
+  for (const b of brackets) {
+    if (price > prev) {
+      const slice = Math.min(price, b.upTo) - prev;
+      tax += slice * b.rate;
+      prev = b.upTo;
+      if (price <= b.upTo) break;
+    }
+  }
+  return tax;
+}
+
+// Calcule la prime d'assurance SCHL si la mise de fond est < 20%.
+// Tarifs SCHL 2024 — la prime est ajoutée au principal du prêt.
+function reComputeSchlPremium(price, downPayment) {
+  if (!price || price <= 0 || downPayment >= price) return 0;
+  const baseLoan = price - downPayment;
+  const dpRatio = downPayment / price;
+  let rate = 0;
+  if (dpRatio >= 0.20) rate = 0;       // pas d'assurance requise
+  else if (dpRatio >= 0.15) rate = 0.028;  // 2.80%
+  else if (dpRatio >= 0.10) rate = 0.031;  // 3.10%
+  else if (dpRatio >= 0.05) rate = 0.040;  // 4.00%
+  else rate = 0; // < 5% : prêt assuré non disponible normalement
+  return baseLoan * rate;
 }
 
 // Renvoie la mise de fond effective en $, peu importe le mode de saisie.
@@ -1980,7 +2031,22 @@ function calculateRealEstateMetrics(a) {
   // Hypothèque — basée sur la mise de fond effective (peu importe le mode de saisie)
   const downPayment = reEffectiveDownPayment(a);
   const downPaymentPct = reEffectiveDownPaymentPercent(a);
-  const principal = Math.max(0, (Number(a.purchasePrice) || 0) - downPayment);
+  const basePrincipal = Math.max(0, (Number(a.purchasePrice) || 0) - downPayment);
+  // Prime SCHL (auto ou manuelle) — ajoutée au principal du prêt
+  const schlPremium = a.schlAuto !== false
+    ? reComputeSchlPremium(Number(a.purchasePrice) || 0, downPayment)
+    : (Number(a.schlPremium) || 0);
+  const principal = basePrincipal + schlPremium;
+  // Frais de clôture ponctuels (taxe de bienvenue + notaire + inspection + autres)
+  const welcomeTax = a.welcomeTaxAuto !== false
+    ? reComputeWelcomeTax(Number(a.purchasePrice) || 0)
+    : (Number(a.welcomeTax) || 0);
+  const notaryFees = Number(a.notaryFees) || 0;
+  const inspectionFees = Number(a.inspectionFees) || 0;
+  const otherClosingFees = Number(a.otherClosingFees) || 0;
+  const closingCostsTotal = welcomeTax + notaryFees + inspectionFees + otherClosingFees;
+  // Cash réellement requis à l'achat (mise de fond + frais de clôture)
+  const cashToClose = downPayment + closingCostsTotal;
   const monthlyPmt  = canadianMortgagePayment(principal, a.interestRate, a.amortYears, "monthly");
   const biweeklyPmt = canadianMortgagePayment(principal, a.interestRate, a.amortYears, "biweekly_accel");
   const weeklyPmt   = canadianMortgagePayment(principal, a.interestRate, a.amortYears, "weekly_accel");
@@ -2002,8 +2068,8 @@ function calculateRealEstateMetrics(a) {
   const stressMonthlyCashFlow = stressAnnualCashFlow / 12;
   // DSCR : NOI / service de la dette annuel (≥ 1.20 = solide pour les prêteurs)
   const dscr = (annualMortgageStd > 0) ? noi / annualMortgageStd : null;
-  // Cash-on-Cash : retour annuel sur la mise de fond effective
-  const cashOnCash = (downPayment > 0) ? (annualCashFlow / downPayment) * 100 : null;
+  // Cash-on-Cash : retour annuel sur le CASH RÉELLEMENT INVESTI (mise de fond + frais de clôture)
+  const cashOnCash = (cashToClose > 0) ? (annualCashFlow / cashToClose) * 100 : null;
   // Break-even occupancy : à quel taux d'occupation l'immeuble couvre tout juste ses coûts
   // ((charges + hypothèque) - frais variables liés aux loyers) / loyers bruts annuels
   // Simplification : on inclut tout dans le seuil. Sous 85% = confortable, au-dessus = fragile.
@@ -2021,10 +2087,12 @@ function calculateRealEstateMetrics(a) {
       else verdict = "good";                                     // débours raisonnable
     }
   } else if (grossAnnualRent > 0 && a.purchasePrice > 0) {
-    // Seuils ajustés pour le marché québécois urbain (Montréal/Québec) où cap rate 6%+ est rare en 2026
+    // Seuils MRB configurables par analyse (secteur)
+    const mrbGood = Number(a.mrbTargetGood) || 14;
+    const mrbExc  = Number(a.mrbTargetExcellent) || 10;
     if (monthlyCashFlow < -300) verdict = "bad";                            // Tolère un petit déficit si les fondamentaux sont bons
-    else if (capRate < 4 || mrb > 14 || stressMonthlyCashFlow < -300) verdict = "risky";
-    else if (capRate >= 5 && mrb <= 10 && stressMonthlyCashFlow >= 0) verdict = "excellent";  // 5%/10 réaliste Qc
+    else if (capRate < 4 || mrb > mrbGood || stressMonthlyCashFlow < -300) verdict = "risky";
+    else if (capRate >= 5 && mrb <= mrbExc && stressMonthlyCashFlow >= 0) verdict = "excellent";
     else verdict = "good";
   }
   return {
@@ -2032,7 +2100,9 @@ function calculateRealEstateMetrics(a) {
     municipalTax, schoolTax, insurance,
     electricityMo, otherServiceMo, servicesMonthly, servicesY,
     maintenance, management, totalOpex,
-    noi, principal, downPayment, downPaymentPct,
+    noi, principal, basePrincipal, schlPremium,
+    downPayment, downPaymentPct,
+    welcomeTax, notaryFees, inspectionFees, otherClosingFees, closingCostsTotal, cashToClose,
     monthlyPmt, biweeklyPmt, weeklyPmt,
     annualMortgageStd, annualCashFlow, monthlyCashFlow,
     costToLiveMonthly,
@@ -2139,23 +2209,25 @@ function getVerdictReasons(a, m) {
 
   // --- MRB (multiplicateur de revenu brut) ---
   if (m.grossAnnualRent > 0) {
-    if (m.mrb <= 8) {
+    const mrbGood = Number(a.mrbTargetGood) || 14;
+    const mrbExc  = Number(a.mrbTargetExcellent) || 10;
+    if (m.mrb <= mrbExc) {
       reasons.push({
         status: "pass",
         title: `Prix raisonnable par rapport aux loyers (MRB ${m.mrb.toFixed(1)})`,
-        detail: `L'immeuble coûte ${m.mrb.toFixed(1)} × les revenus locatifs annuels. Plus le chiffre est bas, mieux c'est — sous 8, c'est généralement une bonne affaire au Québec.`
+        detail: `L'immeuble coûte ${m.mrb.toFixed(1)} × les revenus locatifs annuels. C'est sous ton seuil "excellent" (≤ ${mrbExc}) — bonne affaire pour ce secteur.`
       });
-    } else if (m.mrb <= 14) {
+    } else if (m.mrb <= mrbGood) {
       reasons.push({
         status: "warn",
         title: `Prix moyen par rapport aux loyers (MRB ${m.mrb.toFixed(1)})`,
-        detail: `L'immeuble coûte ${m.mrb.toFixed(1)} × les revenus locatifs annuels. Acceptable dans des marchés urbains tendus comme Montréal ou Québec, mais sans aubaine. Le retour par les loyers seuls est lent.`
+        detail: `L'immeuble coûte ${m.mrb.toFixed(1)} × les revenus locatifs annuels. Entre ${mrbExc} et ${mrbGood} — acceptable pour ce secteur, mais sans aubaine. Le retour par les loyers seuls est lent.`
       });
     } else {
       reasons.push({
         status: "fail",
         title: `Prix élevé par rapport aux loyers (MRB ${m.mrb.toFixed(1)})`,
-        detail: `L'immeuble coûte ${m.mrb.toFixed(1)} × les revenus locatifs annuels — c'est plus de 14 ×, donc cher pour le Québec. Tu paries fortement sur l'appréciation future plutôt que sur les revenus locatifs.`
+        detail: `L'immeuble coûte ${m.mrb.toFixed(1)} × les revenus locatifs annuels — c'est plus de ${mrbGood} × (ton seuil pour ce secteur), donc cher. Tu paries fortement sur l'appréciation future plutôt que sur les revenus locatifs.`
       });
     }
   }
@@ -2335,9 +2407,11 @@ function reSuggestedPrice(a) {
   const priceFromCapExcellent  = noi / 0.05;  // 5%
 
   // (c) MRB cible : price/grossAnnual ≤ cible  →  price ≤ grossAnnual × cible
-  // Seuils ajustés pour le marché tendu du Québec (Montréal/Québec city)
-  const priceFromMrbGood       = grossAnnualRent * 14; // ≤ 14
-  const priceFromMrbExcellent  = grossAnnualRent * 10; // ≤ 10
+  // Seuils MRB configurables par analyse (varient selon le marché local)
+  const mrbGoodTarget = Number(a.mrbTargetGood) || 14;
+  const mrbExcellentTarget = Number(a.mrbTargetExcellent) || 10;
+  const priceFromMrbGood       = grossAnnualRent * mrbGoodTarget;
+  const priceFromMrbExcellent  = grossAnnualRent * mrbExcellentTarget;
 
   // Si NOI ≤ 0, aucun prix ne peut donner un bon investissement (les charges dépassent les loyers)
   if (noi <= 0) {
@@ -2665,6 +2739,11 @@ function renderRealEstateEdit() {
         </section>
 
         <section class="re-block">
+          <h3 class="re-block__title">${t("re_section_closing")}</h3>
+          ${renderClosingCostsFields(a)}
+        </section>
+
+        <section class="re-block">
           <h3 class="re-block__title">${t("re_section_projection")}</h3>
           <div class="re-fields">
             <label class="re-field">
@@ -2682,6 +2761,16 @@ function renderRealEstateEdit() {
                 <span class="re-input-suffix__symbol">% /an</span>
               </div>
               <small class="re-hint">${t("re_field_rent_increase_hint")}</small>
+            </label>
+            <label class="re-field">
+              <span>${t("re_field_mrb_good")}${reTip("re_tip_mrb_good")}</span>
+              <input type="number" inputmode="decimal" min="3" max="30" step="any" value="${a.mrbTargetGood ?? 14}" oninput="reCurrent.mrbTargetGood=Math.min(30,Math.max(3,Number(this.value)||14));reRefresh()">
+              <small class="re-hint">${t("re_field_mrb_good_hint")}</small>
+            </label>
+            <label class="re-field">
+              <span>${t("re_field_mrb_excellent")}${reTip("re_tip_mrb_excellent")}</span>
+              <input type="number" inputmode="decimal" min="3" max="30" step="any" value="${a.mrbTargetExcellent ?? 10}" oninput="reCurrent.mrbTargetExcellent=Math.min(30,Math.max(3,Number(this.value)||10));reRefresh()">
+              <small class="re-hint">${t("re_field_mrb_excellent_hint")}</small>
             </label>
           </div>
         </section>
@@ -2735,6 +2824,79 @@ function renderRealEstateEdit() {
     </div>
   </div>`;
   return h;
+}
+
+// Rendu de la section Frais de clôture & SCHL dans le formulaire
+function renderClosingCostsFields(a) {
+  const price = Number(a.purchasePrice) || 0;
+  const dp = reEffectiveDownPayment(a);
+  const dpPct = price > 0 ? (dp / price) * 100 : 0;
+  const autoWelcomeTax = reComputeWelcomeTax(price);
+  const currentWelcomeTax = a.welcomeTaxAuto !== false ? autoWelcomeTax : (Number(a.welcomeTax) || 0);
+  const autoSchl = reComputeSchlPremium(price, dp);
+  const currentSchl = a.schlAuto !== false ? autoSchl : (Number(a.schlPremium) || 0);
+  const schlApplicable = price > 0 && dpPct < 20 && dpPct >= 5;
+  const totalClosing = currentWelcomeTax + (Number(a.notaryFees) || 0) + (Number(a.inspectionFees) || 0) + (Number(a.otherClosingFees) || 0);
+  return `
+    <div class="re-fields">
+      <label class="re-field">
+        <span>${t("re_field_welcome_tax")}${reTip("re_tip_welcome_tax")}</span>
+        <div class="re-input-suffix">
+          <span class="re-input-suffix__symbol re-input-suffix__symbol--left">$</span>
+          <input type="number" inputmode="numeric" min="0" step="any" value="${a.welcomeTaxAuto !== false ? autoWelcomeTax.toFixed(0) : (a.welcomeTax || '')}" oninput="reCurrent.welcomeTaxAuto=false;reCurrent.welcomeTax=Math.max(0,Number(this.value)||0);reRefresh()" ${a.welcomeTaxAuto !== false ? 'disabled style="opacity:0.7;cursor:not-allowed"' : ''}>
+        </div>
+        <label class="re-checkbox" style="margin-top:6px">
+          <input type="checkbox" ${a.welcomeTaxAuto !== false ? 'checked' : ''} onchange="reCurrent.welcomeTaxAuto=this.checked;if(this.checked)reCurrent.welcomeTax=reComputeWelcomeTax(Number(reCurrent.purchasePrice)||0);renderPage()">
+          <span>${t("re_field_auto_calc")}</span>
+        </label>
+      </label>
+      <label class="re-field">
+        <span>${t("re_field_notary")}${reTip("re_tip_notary")}</span>
+        <div class="re-input-suffix">
+          <span class="re-input-suffix__symbol re-input-suffix__symbol--left">$</span>
+          <input type="number" inputmode="numeric" min="0" step="any" value="${a.notaryFees ?? ""}" oninput="reCurrent.notaryFees=Math.max(0,Number(this.value)||0);reRefresh()">
+        </div>
+      </label>
+      <label class="re-field">
+        <span>${t("re_field_inspection")}${reTip("re_tip_inspection")}</span>
+        <div class="re-input-suffix">
+          <span class="re-input-suffix__symbol re-input-suffix__symbol--left">$</span>
+          <input type="number" inputmode="numeric" min="0" step="any" value="${a.inspectionFees ?? ""}" oninput="reCurrent.inspectionFees=Math.max(0,Number(this.value)||0);reRefresh()">
+        </div>
+      </label>
+      <label class="re-field">
+        <span>${t("re_field_other_closing")}</span>
+        <div class="re-input-suffix">
+          <span class="re-input-suffix__symbol re-input-suffix__symbol--left">$</span>
+          <input type="number" inputmode="numeric" min="0" step="any" value="${a.otherClosingFees || ""}" oninput="reCurrent.otherClosingFees=Math.max(0,Number(this.value)||0);reRefresh()">
+        </div>
+        <small class="re-hint">${t("re_field_other_closing_hint")}</small>
+      </label>
+      <div class="re-field re-field--wide re-field--summary">
+        <span>${t("re_field_closing_total")} <strong>${fmtMoney(totalClosing)}</strong></span>
+      </div>
+      ${schlApplicable ? `
+        <div class="re-field re-field--wide">
+          <div class="re-field__head">
+            <span>${t("re_field_schl")}${reTip("re_tip_schl")}</span>
+          </div>
+          <div class="re-input-suffix">
+            <span class="re-input-suffix__symbol re-input-suffix__symbol--left">$</span>
+            <input type="number" inputmode="numeric" min="0" step="any" value="${a.schlAuto !== false ? autoSchl.toFixed(0) : (a.schlPremium || '')}" oninput="reCurrent.schlAuto=false;reCurrent.schlPremium=Math.max(0,Number(this.value)||0);reRefresh()" ${a.schlAuto !== false ? 'disabled style="opacity:0.7;cursor:not-allowed"' : ''}>
+          </div>
+          <label class="re-checkbox" style="margin-top:6px">
+            <input type="checkbox" ${a.schlAuto !== false ? 'checked' : ''} onchange="reCurrent.schlAuto=this.checked;renderPage()">
+            <span>${t("re_field_auto_calc")} (${(dpPct).toFixed(1)}% MF → ${(currentSchl/Math.max(1,price-dp)*100).toFixed(2)}%)</span>
+          </label>
+          <small class="re-hint">${t("re_field_schl_hint")}</small>
+        </div>
+      ` : (price > 0 && dpPct >= 20 ? `
+        <div class="re-field re-field--wide">
+          <small class="re-hint" style="color:var(--status-green)">✓ ${t("re_field_schl_not_needed")}</small>
+        </div>
+      ` : '')}
+    </div>
+  `;
 }
 
 // Carte qui suggère un prix d'offre pour que ce soit un bon/excellent investissement
@@ -2959,12 +3121,30 @@ function renderRealEstateResults(a) {
         <div class="re-metric__value">${fmtMoney(m.totalOpex)}${t("re_metric_per_year")}</div>
       </div>
 
+      <div class="re-metric re-metric--highlight">
+        <div class="re-metric__label">${icon("dollar-sign", 12)} ${t("re_metric_cash_to_close")}${reTip("re_tip_cash_to_close")}</div>
+        <div class="re-metric__value">${fmtMoney(m.cashToClose)}</div>
+        <div class="re-metric__breakdown">
+          <div><span>${t("re_field_downpayment")}</span><strong>${fmtMoney(m.downPayment)}</strong></div>
+          <div><span>${t("re_field_welcome_tax")}</span><strong>${fmtMoney(m.welcomeTax)}</strong></div>
+          <div><span>${t("re_field_notary")}</span><strong>${fmtMoney(m.notaryFees)}</strong></div>
+          <div><span>${t("re_field_inspection")}</span><strong>${fmtMoney(m.inspectionFees)}</strong></div>
+          ${m.otherClosingFees > 0 ? `<div><span>${t("re_field_other_closing")}</span><strong>${fmtMoney(m.otherClosingFees)}</strong></div>` : ""}
+          ${m.schlPremium > 0 ? `<div><span>${t("re_field_schl")} (au prêt)</span><strong>+${fmtMoney(m.schlPremium)}</strong></div>` : ""}
+        </div>
+      </div>
+
       <div class="re-metric re-metric--stress">
         <div class="re-metric__label">${t("re_metric_stress")}${reTip("re_tip_stress")}</div>
         <div class="re-metric__value re-metric__value--${stressClass}">${fmtMoney(m.stressMonthlyCashFlow)}<span class="re-metric__suffix">${t("re_metric_per_month")}</span></div>
       </div>
 
       <div id="re-projection">${renderRealEstateProjection(a, reProjectionYears)}</div>
+
+      <div id="re-projection-chart-wrap" class="re-projection-chart-wrap">
+        <div class="re-projection-chart__title">${t("re_chart_title")}</div>
+        <canvas id="re-projection-chart" height="220"></canvas>
+      </div>
     </div>
   `;
 }
@@ -3059,6 +3239,8 @@ function reSetProjectionYears(years) {
   reProjectionYears = Math.max(1, Math.min(50, Number(years) || 10));
   const block = document.getElementById("re-projection");
   if (block && reCurrent) block.innerHTML = renderRealEstateProjection(reCurrent, reProjectionYears);
+  // Met à jour aussi le graphique
+  if (reCurrent) setTimeout(() => reDrawProjectionChart(reCurrent), 0);
 }
 
 // Handlers
@@ -3102,7 +3284,123 @@ function reBackToList() {
 function reRefresh() {
   // Met à jour seulement le panneau de résultats, sans recréer les inputs (préserve le focus)
   const panel = document.getElementById("re-results");
-  if (panel && reCurrent) panel.innerHTML = renderRealEstateResults(reCurrent);
+  if (panel && reCurrent) {
+    panel.innerHTML = renderRealEstateResults(reCurrent);
+    // Redessine le graphique de projection
+    setTimeout(() => reDrawProjectionChart(reCurrent), 0);
+  }
+}
+
+let reChartInstance = null;
+function reDrawProjectionChart(a) {
+  if (typeof Chart === "undefined") return;
+  const canvas = document.getElementById("re-projection-chart");
+  if (!canvas || !a) return;
+  // Calcule les valeurs année par année jusqu'à la durée de projection (max 30)
+  const horizon = Math.max(5, Math.min(30, Number(reProjectionYears) || 10));
+  const labels = [];
+  const dataValue = [];
+  const dataBalance = [];
+  const dataEquity = [];
+  for (let y = 1; y <= horizon; y++) {
+    const p = projectRealEstate(a, y);
+    labels.push(`${y}`);
+    dataValue.push(Math.round(p.futureValue));
+    dataBalance.push(Math.round(p.mortgageBalance));
+    dataEquity.push(Math.round(p.equity));
+  }
+  // Couleurs depuis les variables CSS
+  const styles = getComputedStyle(document.documentElement);
+  const accent = styles.getPropertyValue("--status-green").trim() || "#10b981";
+  const blue   = styles.getPropertyValue("--status-blue").trim()  || "#2563eb";
+  const red    = styles.getPropertyValue("--status-red").trim()   || "#ef4444";
+  const muted  = styles.getPropertyValue("--text3").trim()        || "#64748b";
+  // Destroy existing instance if any
+  if (reChartInstance) {
+    reChartInstance.destroy();
+    reChartInstance = null;
+  }
+  reChartInstance = new Chart(canvas, {
+    type: "line",
+    data: {
+      labels,
+      datasets: [
+        {
+          label: t("re_chart_value"),
+          data: dataValue,
+          borderColor: blue,
+          backgroundColor: blue + "20",
+          tension: 0.25,
+          fill: false,
+          borderWidth: 2.5,
+          pointRadius: 0,
+          pointHoverRadius: 5
+        },
+        {
+          label: t("re_chart_balance"),
+          data: dataBalance,
+          borderColor: red,
+          backgroundColor: red + "20",
+          tension: 0.25,
+          fill: false,
+          borderWidth: 2.5,
+          pointRadius: 0,
+          pointHoverRadius: 5
+        },
+        {
+          label: t("re_chart_equity"),
+          data: dataEquity,
+          borderColor: accent,
+          backgroundColor: accent + "30",
+          tension: 0.25,
+          fill: true,
+          borderWidth: 2.5,
+          pointRadius: 0,
+          pointHoverRadius: 5
+        }
+      ]
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      interaction: { mode: "index", intersect: false },
+      plugins: {
+        legend: {
+          position: "bottom",
+          labels: { boxWidth: 12, font: { size: 11 }, color: muted }
+        },
+        tooltip: {
+          callbacks: {
+            label: function(ctx) {
+              return ctx.dataset.label + ": " + fmtMoney(ctx.parsed.y);
+            },
+            title: function(items) {
+              return t("re_chart_year") + " " + items[0].label;
+            }
+          }
+        }
+      },
+      scales: {
+        x: {
+          title: { display: true, text: t("re_chart_year"), color: muted, font: { size: 11 } },
+          ticks: { color: muted, font: { size: 10 } },
+          grid: { display: false }
+        },
+        y: {
+          ticks: {
+            color: muted,
+            font: { size: 10 },
+            callback: function(value) {
+              if (value >= 1e6) return (value/1e6).toFixed(1) + "M";
+              if (value >= 1e3) return (value/1e3).toFixed(0) + "k";
+              return value;
+            }
+          },
+          grid: { color: muted + "22" }
+        }
+      }
+    }
+  });
 }
 function reRefreshDownPaymentHint() {
   const el = document.getElementById("re-downpayment-hint");

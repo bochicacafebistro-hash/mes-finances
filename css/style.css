@@ -3557,6 +3557,19 @@ h1, h2, h3, h4 {
   font-size: var(--fs-sm);
 }
 .re-field--wide { grid-column: 1 / -1; }
+.re-field--summary {
+  background: var(--surface2);
+  padding: var(--sp-3);
+  border-radius: var(--radius-md);
+  border: 1px solid var(--border);
+  font-size: var(--fs-sm);
+  color: var(--text2);
+}
+.re-field--summary strong {
+  color: var(--text);
+  font-variant-numeric: tabular-nums;
+  font-weight: 700;
+}
 .re-field > span {
   font-weight: 600;
   color: var(--text2);
@@ -4291,6 +4304,29 @@ h1, h2, h3, h4 {
   font-style: italic;
   line-height: 1.4;
   text-align: center;
+}
+
+/* Graphique de projection */
+.re-projection-chart-wrap {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  padding: var(--sp-4);
+  margin-top: var(--sp-2);
+}
+.re-projection-chart__title {
+  font-size: var(--fs-xs);
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: var(--text3);
+  margin-bottom: var(--sp-2);
+  text-align: center;
+}
+.re-projection-chart-wrap canvas {
+  width: 100% !important;
+  height: 220px !important;
+  display: block;
 }
 
 /* Bloc Projection long terme */
