@@ -3965,6 +3965,57 @@ h1, h2, h3, h4 {
 .btn-link--danger { color: var(--status-red); }
 .btn-link--danger:hover { color: var(--status-red); opacity: 0.8; }
 
+/* Radio buttons pour fréquence de paiement hypothécaire */
+.re-freq-radios {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: var(--sp-2);
+}
+.re-freq-radio {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-2);
+  padding: var(--sp-3);
+  background: var(--bg);
+  border: 1.5px solid var(--border);
+  border-radius: var(--radius-md);
+  cursor: pointer;
+  transition: border-color var(--transition-fast), background var(--transition-fast);
+}
+.re-freq-radio:hover { border-color: var(--border-strong); }
+.re-freq-radio.is-active {
+  border-color: var(--accent);
+  background: var(--status-green-bg);
+  box-shadow: 0 0 0 2px rgba(16,185,129,0.15);
+}
+.re-freq-radio input[type="radio"] {
+  flex-shrink: 0;
+  accent-color: var(--accent);
+  cursor: pointer;
+}
+.re-freq-radio__content { flex: 1; min-width: 0; }
+.re-freq-radio__label {
+  font-size: var(--fs-xs);
+  font-weight: 700;
+  color: var(--text2);
+  text-transform: uppercase;
+  letter-spacing: 0.3px;
+  margin-bottom: 2px;
+}
+.re-freq-radio.is-active .re-freq-radio__label { color: var(--accent); }
+.re-freq-radio__amount {
+  font-size: var(--fs-md);
+  font-weight: 800;
+  color: var(--text);
+  font-variant-numeric: tabular-nums;
+}
+.re-freq-radio__suffix {
+  font-size: var(--fs-xs);
+  color: var(--text3);
+  font-weight: 500;
+  margin-left: 4px;
+}
+
 /* Toggle $ / % pour mise de fond */
 .re-field__head {
   display: flex;
@@ -4088,6 +4139,12 @@ h1, h2, h3, h4 {
   font-weight: 600;
   color: var(--text);
 }
+.re-checkbox--inline {
+  font-size: var(--fs-xs);
+  color: var(--text2);
+  gap: 4px;
+}
+.re-checkbox--inline input { width: 14px; height: 14px; cursor: pointer; }
 
 /* Métrique mise en évidence (coût pour habiter) */
 .re-metric--highlight {

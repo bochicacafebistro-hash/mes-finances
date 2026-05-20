@@ -1895,9 +1895,14 @@ function reNewAnalysis() {
     // Services décomposés
     electricity: 0,             // $/mois (électricité payée par le proprio)
     otherServiceName: "",       // nom libre (ex: "Internet immeuble", "Déneigement")
-    otherServiceAmount: 0,      // $/mois
+    otherServiceAmount: 0,      // montant tel que saisi (en $)
+    otherServiceFrequency: "monthly", // "monthly" | "annual" — fréquence du montant
+    // Maintenance & travaux — peut être % de loyer, $/mois fixe, ou $/an fixe
     maintenancePercent: 5,
+    maintenanceMode: "percent", // "percent" | "monthly" | "annual"
+    maintenanceAmount: 0,       // utilisé si mode = monthly ou annual
     vacancyPercent: 3,
+    vacancyEnabled: true,       // si false, vacance ignorée
     managementPercent: 0,
     // Projection à long terme
     appreciationPercent: 5,    // appréciation annuelle du prix (% / an) — médiane historique Qc long terme
@@ -2082,28 +2087,38 @@ function calculateRealEstateMetrics(a) {
   const hasOwnerOccupied = ownerOccupiedUnits.length > 0;
   const grossMonthlyRent = rentingUnits.reduce((s, u) => s + (Number(u.rent) || 0), 0);
   const grossAnnualRent = grossMonthlyRent * 12;
-  // Vacance
-  const vacancyLoss = grossAnnualRent * ((Number(a.vacancyPercent) || 0) / 100);
+  // Vacance — appliquée seulement si vacancyEnabled est true (par défaut true pour compat)
+  const vacancyApplied = a.vacancyEnabled === false ? 0 : (Number(a.vacancyPercent) || 0);
+  const vacancyLoss = grossAnnualRent * (vacancyApplied / 100);
   const effectiveGrossIncome = grossAnnualRent - vacancyLoss;
   // Charges opérationnelles annuelles (sans hypothèque)
   const municipalTax = Number(a.municipalTax) || 0;
   const schoolTax    = Number(a.schoolTax) || 0;
   const insurance    = Number(a.insurance) || 0;
-  // Services décomposés + compat descendante (anciens docs avec field "services")
+  // Services : électricité (toujours mensuelle) + autre service (mensuel ou annuel)
   const electricityMo = Number(a.electricity) || 0;
-  const otherServiceMo = Number(a.otherServiceAmount) || 0;
+  const otherRaw = Number(a.otherServiceAmount) || 0;
+  const otherIsAnnual = a.otherServiceFrequency === "annual";
+  const otherServiceMo = otherIsAnnual ? (otherRaw / 12) : otherRaw;
+  // Compat descendante (anciens docs avec field "services")
   const legacyServicesMo = (a.electricity === undefined && a.otherServiceAmount === undefined)
     ? (Number(a.services) || 0) : 0;
   const servicesMonthly = electricityMo + otherServiceMo + legacyServicesMo;
   const servicesY    = servicesMonthly * 12;
-  // Maintenance : si aucun logement loué, on utilise une réserve basée sur la valeur de l'immeuble
-  // (règle 1%/an du prix d'achat) au lieu d'un % des loyers — sinon la réserve tomberait à zéro
-  // pour un SFH proprio-occupant, ce qui serait irréaliste.
-  const maintenanceFromRent = grossAnnualRent * ((Number(a.maintenancePercent) || 0) / 100);
+  // Maintenance — selon le mode choisi : % loyer | $/mois fixe | $/an fixe
+  let maintenanceFromRent;
+  if (a.maintenanceMode === "monthly") {
+    maintenanceFromRent = (Number(a.maintenanceAmount) || 0) * 12;
+  } else if (a.maintenanceMode === "annual") {
+    maintenanceFromRent = Number(a.maintenanceAmount) || 0;
+  } else {
+    maintenanceFromRent = grossAnnualRent * ((Number(a.maintenancePercent) || 0) / 100);
+  }
+  // Floor pour proprio-occupant : 1% de la valeur de l'immeuble si aucun logement loué
   const maintenanceFromValue = (Number(a.purchasePrice) || 0) * 0.01;
   const maintenance  = (rentingUnits.length === 0)
-    ? maintenanceFromValue
-    : Math.max(maintenanceFromRent, maintenanceFromValue * 0.5); // au minimum 0.5% de la valeur même en location complète
+    ? Math.max(maintenanceFromRent, maintenanceFromValue)
+    : maintenanceFromRent;
   const management   = effectiveGrossIncome * ((Number(a.managementPercent) || 0) / 100);
   const totalOpex = municipalTax + schoolTax + insurance + servicesY + maintenance + management;
   // NOI (Net Operating Income) — exclut le service de la dette
@@ -2112,10 +2127,16 @@ function calculateRealEstateMetrics(a) {
   const downPayment = reEffectiveDownPayment(a);
   const downPaymentPct = reEffectiveDownPaymentPercent(a);
   const basePrincipal = Math.max(0, (Number(a.purchasePrice) || 0) - downPayment);
-  // Prime SCHL (auto ou manuelle) — ajoutée au principal du prêt
-  const schlPremium = a.schlAuto !== false
-    ? reComputeSchlPremium(Number(a.purchasePrice) || 0, downPayment)
-    : (Number(a.schlPremium) || 0);
+  // Prime SCHL — forcée à 0 si DP ≥ 20% (pas d'assurance requise) ou DP < 5% (pas prêt assuré standard)
+  // peu importe que schlAuto soit on ou off, on respecte les règles canadiennes
+  const purchasePriceNum = Number(a.purchasePrice) || 0;
+  const dpRatio = purchasePriceNum > 0 ? downPayment / purchasePriceNum : 0;
+  let schlPremium = 0;
+  if (dpRatio >= 0.05 && dpRatio < 0.20) {
+    schlPremium = a.schlAuto !== false
+      ? reComputeSchlPremium(purchasePriceNum, downPayment)
+      : (Number(a.schlPremium) || 0);
+  }
   const principal = basePrincipal + schlPremium;
   // Frais de clôture ponctuels (taxe de bienvenue + notaire + inspection + autres)
   const welcomeTax = a.welcomeTaxAuto !== false
@@ -2130,8 +2151,15 @@ function calculateRealEstateMetrics(a) {
   const monthlyPmt  = canadianMortgagePayment(principal, a.interestRate, a.amortYears, "monthly");
   const biweeklyPmt = canadianMortgagePayment(principal, a.interestRate, a.amortYears, "biweekly_accel");
   const weeklyPmt   = canadianMortgagePayment(principal, a.interestRate, a.amortYears, "weekly_accel");
-  // On utilise la mensualité standard pour les ratios (équitable même si on choisit accéléré)
-  const annualMortgageStd = monthlyPmt * 12;
+  // Coût annuel selon la FRÉQUENCE choisie
+  // - mensuel : 12 × paiement
+  // - bi-mensuel accéléré : 26 × (mensuel/2) = 13 × mensuel
+  // - hebdo accéléré : 52 × (mensuel/4) = 13 × mensuel
+  const selectedFreq = a.paymentFrequency || "monthly";
+  let annualMortgageStd;
+  if (selectedFreq === "biweekly_accel")      annualMortgageStd = biweeklyPmt * 26;
+  else if (selectedFreq === "weekly_accel")   annualMortgageStd = weeklyPmt   * 52;
+  else                                        annualMortgageStd = monthlyPmt  * 12;
   const annualCashFlow = noi - annualMortgageStd;
   const monthlyCashFlow = annualCashFlow / 12;
   // Coût mensuel pour habiter (si proprio-occupant) — c'est ce qui sort de la poche
@@ -2822,36 +2850,6 @@ function renderRealEstateEdit() {
               <span>${t("re_field_address")}</span>
               <input type="text" value="${esc(a.address || "")}" oninput="reCurrent.address=this.value">
             </label>
-            <label class="re-field">
-              <div class="re-field__head">
-                <span>${t("re_field_price")}</span>
-              </div>
-              <div class="re-input-suffix">
-                <span class="re-input-suffix__symbol re-input-suffix__symbol--left">$</span>
-                <input type="number" inputmode="numeric" min="0" step="any"value="${a.purchasePrice || ""}" oninput="reCurrent.purchasePrice=Math.max(0,Number(this.value)||0);reRefreshDownPaymentHint();reRefresh()">
-              </div>
-            </label>
-            <div class="re-field">
-              <div class="re-field__head">
-                <span>${t("re_field_downpayment")}${reTip("re_tip_dp_mode")}</span>
-                <div class="re-toggle" role="tablist">
-                  <button type="button" class="re-toggle__btn ${a.downPaymentMode !== "percent" ? "is-active" : ""}" onclick="reSetDownPaymentMode('amount')">$</button>
-                  <button type="button" class="re-toggle__btn ${a.downPaymentMode === "percent" ? "is-active" : ""}" onclick="reSetDownPaymentMode('percent')">%</button>
-                </div>
-              </div>
-              ${a.downPaymentMode === "percent" ? `
-                <div class="re-input-suffix">
-                  <input type="number" inputmode="decimal" min="0" max="100" step="any"value="${a.downPaymentPercent ?? ""}" oninput="reCurrent.downPaymentPercent=Math.min(100,Math.max(0,Number(this.value)||0));reRefreshDownPaymentHint();reRefresh()">
-                  <span class="re-input-suffix__symbol">%</span>
-                </div>
-              ` : `
-                <div class="re-input-suffix">
-                  <span class="re-input-suffix__symbol re-input-suffix__symbol--left">$</span>
-                  <input type="number" inputmode="numeric" min="0" max="${Number(a.purchasePrice) || 99999999}" step="any"value="${a.downPayment ?? ""}" oninput="reCurrent.downPayment=Math.max(0,Math.min(Number(reCurrent.purchasePrice)||Infinity, Number(this.value)||0));reRefreshDownPaymentHint();reRefresh()">
-                </div>
-              `}
-              <small class="re-hint" id="re-downpayment-hint">${reDownPaymentHintText(a)}</small>
-            </div>
             <label class="re-field re-field--wide">
               <span>${t("re_field_unit_type")}</span>
               <select onchange="reSetUnitType(this.value)">
@@ -2865,21 +2863,50 @@ function renderRealEstateEdit() {
           <h3 class="re-block__title">${icon("dollar-sign", 16)} <span>${t("re_section_mortgage")}</span></h3>
           <div class="re-fields">
             <label class="re-field">
-              <span>${t("re_field_amort")}${reTip("re_tip_amort")}</span>
+              <div class="re-field__head">
+                <span>${t("re_field_price")}</span>
+              </div>
+              <div class="re-input-suffix">
+                <span class="re-input-suffix__symbol re-input-suffix__symbol--left">$</span>
+                <input type="number" inputmode="numeric" min="0" step="any" value="${a.purchasePrice || ""}" oninput="reCurrent.purchasePrice=Math.max(0,Number(this.value)||0);reRefreshDownPaymentHint();reRefresh()">
+              </div>
+            </label>
+            <div class="re-field">
+              <div class="re-field__head">
+                <span>${t("re_field_downpayment")}${reTip("re_tip_dp_mode")}</span>
+                <div class="re-toggle" role="tablist">
+                  <button type="button" class="re-toggle__btn ${a.downPaymentMode !== "percent" ? "is-active" : ""}" onclick="reSetDownPaymentMode('amount')">$</button>
+                  <button type="button" class="re-toggle__btn ${a.downPaymentMode === "percent" ? "is-active" : ""}" onclick="reSetDownPaymentMode('percent')">%</button>
+                </div>
+              </div>
+              ${a.downPaymentMode === "percent" ? `
+                <div class="re-input-suffix">
+                  <input type="number" inputmode="decimal" min="0" max="100" step="any" value="${a.downPaymentPercent ?? ""}" oninput="reCurrent.downPaymentPercent=Math.min(100,Math.max(0,Number(this.value)||0));reRefreshDownPaymentHint();reRefresh()">
+                  <span class="re-input-suffix__symbol">%</span>
+                </div>
+              ` : `
+                <div class="re-input-suffix">
+                  <span class="re-input-suffix__symbol re-input-suffix__symbol--left">$</span>
+                  <input type="number" inputmode="numeric" min="0" max="${Number(a.purchasePrice) || 99999999}" step="any" value="${a.downPayment ?? ""}" oninput="reCurrent.downPayment=Math.max(0,Math.min(Number(reCurrent.purchasePrice)||Infinity, Number(this.value)||0));reRefreshDownPaymentHint();reRefresh()">
+                </div>
+              `}
+              <small class="re-hint" id="re-downpayment-hint">${reDownPaymentHintText(a)}</small>
+            </div>
+            <label class="re-field">
+              <div class="re-field__head"><span>${t("re_field_amort")}${reTip("re_tip_amort")}</span></div>
               <input type="number" inputmode="numeric" min="1" max="40" step="1" value="${a.amortYears || ""}" oninput="reCurrent.amortYears=Math.min(40,Math.max(1,Number(this.value)||0));reRefresh()">
             </label>
             <label class="re-field">
-              <span>${t("re_field_rate")}${reTip("re_tip_interest")}</span>
-              <input type="number" inputmode="decimal" min="0" max="25" step="any"value="${a.interestRate || ""}" oninput="reCurrent.interestRate=Math.min(25,Math.max(0,Number(this.value)||0));reRefresh()">
+              <div class="re-field__head"><span>${t("re_field_rate")}${reTip("re_tip_interest")}</span></div>
+              <div class="re-input-suffix">
+                <input type="number" inputmode="decimal" min="0" max="25" step="any" value="${a.interestRate || ""}" oninput="reCurrent.interestRate=Math.min(25,Math.max(0,Number(this.value)||0));reRefresh()">
+                <span class="re-input-suffix__symbol">%</span>
+              </div>
             </label>
-            <label class="re-field re-field--wide">
-              <span>${t("re_field_payment_freq")}${reTip("re_tip_payment_freq")}</span>
-              <select onchange="reCurrent.paymentFrequency=this.value;reRefresh()">
-                <option value="monthly" ${a.paymentFrequency === "monthly" ? "selected" : ""}>${t("re_freq_monthly")}</option>
-                <option value="biweekly_accel" ${a.paymentFrequency === "biweekly_accel" ? "selected" : ""}>${t("re_freq_biweekly")}</option>
-                <option value="weekly_accel" ${a.paymentFrequency === "weekly_accel" ? "selected" : ""}>${t("re_freq_weekly")}</option>
-              </select>
-            </label>
+            <div class="re-field re-field--wide">
+              <div class="re-field__head"><span>${t("re_field_payment_freq")}${reTip("re_tip_payment_freq")}</span></div>
+              ${renderPaymentFrequencyRadios(a)}
+            </div>
           </div>
         </section>
 
@@ -2909,31 +2936,58 @@ function renderRealEstateEdit() {
             </label>
             <div class="re-field">
               <div class="re-field__head">
-                <input type="text" class="re-field__inline-input" placeholder="${t("re_field_other_service_placeholder")}" value="${esc(a.otherServiceName || "")}" maxlength="50" oninput="reCurrent.otherServiceName=this.value">
+                <input type="text" class="re-field__inline-input" placeholder="${t("re_field_other_service_placeholder")}" value="${esc(a.otherServiceName || "")}" maxlength="50" oninput="reCurrent.otherServiceName=this.value;reRefresh()">
+                <div class="re-toggle" role="tablist">
+                  <button type="button" class="re-toggle__btn ${a.otherServiceFrequency !== "annual" ? "is-active" : ""}" onclick="reCurrent.otherServiceFrequency='monthly';renderPage()">${t("re_freq_mo_short")}</button>
+                  <button type="button" class="re-toggle__btn ${a.otherServiceFrequency === "annual" ? "is-active" : ""}" onclick="reCurrent.otherServiceFrequency='annual';renderPage()">${t("re_freq_an_short")}</button>
+                </div>
               </div>
               <div class="re-input-suffix">
                 <span class="re-input-suffix__symbol re-input-suffix__symbol--left">$</span>
-                <input type="number" inputmode="numeric" min="0" step="any"value="${a.otherServiceAmount || ""}" oninput="reCurrent.otherServiceAmount=Math.max(0,Number(this.value)||0);reRefresh()">
-                <span class="re-input-suffix__symbol">${t("re_metric_per_month")}</span>
+                <input type="number" inputmode="numeric" min="0" step="any" value="${a.otherServiceAmount || ""}" oninput="reCurrent.otherServiceAmount=Math.max(0,Number(this.value)||0);reRefresh()">
+                <span class="re-input-suffix__symbol">${a.otherServiceFrequency === "annual" ? t("re_metric_per_year") : t("re_metric_per_month")}</span>
               </div>
               <small class="re-hint">${t("re_field_other_service_hint")}</small>
             </div>
-            <label class="re-field">
-              <span>${t("re_field_maintenance")}${reTip("re_tip_maintenance")}</span>
-              <div class="re-input-suffix">
-                <input type="number" inputmode="decimal" min="0" max="50" step="any"value="${a.maintenancePercent ?? ""}" oninput="reCurrent.maintenancePercent=Math.min(50,Math.max(0,Number(this.value)||0));reRefresh()">
-                <span class="re-input-suffix__symbol">%</span>
+            <div class="re-field">
+              <div class="re-field__head">
+                <span>${t("re_field_maintenance")}${reTip("re_tip_maintenance")}</span>
+                <div class="re-toggle" role="tablist">
+                  <button type="button" class="re-toggle__btn ${(a.maintenanceMode || "percent") === "percent" ? "is-active" : ""}" onclick="reCurrent.maintenanceMode='percent';renderPage()">%</button>
+                  <button type="button" class="re-toggle__btn ${a.maintenanceMode === "monthly" ? "is-active" : ""}" onclick="reCurrent.maintenanceMode='monthly';renderPage()">${t("re_freq_mo_short")}</button>
+                  <button type="button" class="re-toggle__btn ${a.maintenanceMode === "annual" ? "is-active" : ""}" onclick="reCurrent.maintenanceMode='annual';renderPage()">${t("re_freq_an_short")}</button>
+                </div>
               </div>
+              ${(a.maintenanceMode || "percent") === "percent" ? `
+                <div class="re-input-suffix">
+                  <input type="number" inputmode="decimal" min="0" max="50" step="any" value="${a.maintenancePercent ?? ""}" oninput="reCurrent.maintenancePercent=Math.min(50,Math.max(0,Number(this.value)||0));reRefresh()">
+                  <span class="re-input-suffix__symbol">${t("re_field_maint_pct_suffix")}</span>
+                </div>
+              ` : `
+                <div class="re-input-suffix">
+                  <span class="re-input-suffix__symbol re-input-suffix__symbol--left">$</span>
+                  <input type="number" inputmode="numeric" min="0" step="any" value="${a.maintenanceAmount ?? ""}" oninput="reCurrent.maintenanceAmount=Math.max(0,Number(this.value)||0);reRefresh()">
+                  <span class="re-input-suffix__symbol">${a.maintenanceMode === "annual" ? t("re_metric_per_year") : t("re_metric_per_month")}</span>
+                </div>
+              `}
               <small class="re-hint">${t("re_field_maintenance_hint")}</small>
-            </label>
-            <label class="re-field">
-              <span>${t("re_field_vacancy")}${reTip("re_tip_vacancy")}</span>
-              <div class="re-input-suffix">
-                <input type="number" inputmode="decimal" min="0" max="50" step="any"value="${a.vacancyPercent ?? ""}" oninput="reCurrent.vacancyPercent=Math.min(50,Math.max(0,Number(this.value)||0));reRefresh()">
-                <span class="re-input-suffix__symbol">%</span>
+            </div>
+            <div class="re-field">
+              <div class="re-field__head">
+                <span>${t("re_field_vacancy")}${reTip("re_tip_vacancy")}</span>
+                <label class="re-checkbox re-checkbox--inline">
+                  <input type="checkbox" ${a.vacancyEnabled !== false ? "checked" : ""} onchange="reCurrent.vacancyEnabled=this.checked;renderPage()">
+                  <span>${t("re_field_vacancy_enable")}</span>
+                </label>
               </div>
+              ${a.vacancyEnabled !== false ? `
+                <div class="re-input-suffix">
+                  <input type="number" inputmode="decimal" min="0" max="50" step="any" value="${a.vacancyPercent ?? ""}" oninput="reCurrent.vacancyPercent=Math.min(50,Math.max(0,Number(this.value)||0));reRefresh()">
+                  <span class="re-input-suffix__symbol">%</span>
+                </div>
+              ` : `<small class="re-hint" style="color:var(--text3);font-style:italic">${t("re_field_vacancy_ignored")}</small>`}
               <small class="re-hint">${t("re_field_vacancy_hint")}</small>
-            </label>
+            </div>
             <label class="re-field re-field--wide">
               <span>${t("re_field_management")}${reTip("re_tip_management")}</span>
               <div class="re-input-suffix">
@@ -3065,6 +3119,43 @@ function renderRealEstateEdit() {
     </div>
   </div>`;
   return h;
+}
+
+// Rendu des 3 options de fréquence de paiement hypothécaire en radio buttons
+function renderPaymentFrequencyRadios(a) {
+  const downPayment = reEffectiveDownPayment(a);
+  const purchasePriceNum = Number(a.purchasePrice) || 0;
+  const dpRatio = purchasePriceNum > 0 ? downPayment / purchasePriceNum : 0;
+  const baseLoan = Math.max(0, purchasePriceNum - downPayment);
+  let schlPremium = 0;
+  if (dpRatio >= 0.05 && dpRatio < 0.20) {
+    schlPremium = a.schlAuto !== false
+      ? reComputeSchlPremium(purchasePriceNum, downPayment)
+      : (Number(a.schlPremium) || 0);
+  }
+  const principal = baseLoan + schlPremium;
+  const monthlyPmt = canadianMortgagePayment(principal, a.interestRate, a.amortYears, "monthly");
+  const biweeklyPmt = canadianMortgagePayment(principal, a.interestRate, a.amortYears, "biweekly_accel");
+  const weeklyPmt = canadianMortgagePayment(principal, a.interestRate, a.amortYears, "weekly_accel");
+  const current = a.paymentFrequency || "monthly";
+  const options = [
+    { value: "monthly",        label: t("re_freq_monthly"),  amount: monthlyPmt,  suffix: t("re_metric_per_month") },
+    { value: "biweekly_accel", label: t("re_freq_biweekly"), amount: biweeklyPmt, suffix: t("re_freq_per_biweek") },
+    { value: "weekly_accel",   label: t("re_freq_weekly"),   amount: weeklyPmt,   suffix: t("re_freq_per_week") }
+  ];
+  return `
+    <div class="re-freq-radios">
+      ${options.map(o => `
+        <label class="re-freq-radio ${current === o.value ? "is-active" : ""}">
+          <input type="radio" name="payFreq" value="${o.value}" ${current === o.value ? "checked" : ""} onchange="reCurrent.paymentFrequency=this.value;renderPage()">
+          <div class="re-freq-radio__content">
+            <div class="re-freq-radio__label">${o.label}</div>
+            <div class="re-freq-radio__amount">${fmtMoney(o.amount)}<span class="re-freq-radio__suffix">${o.suffix}</span></div>
+          </div>
+        </label>
+      `).join("")}
+    </div>
+  `;
 }
 
 // Rendu de la section Frais de clôture & SCHL dans le formulaire
@@ -3300,7 +3391,7 @@ function renderRealEstateResults(a) {
           <div class="re-metric__label">${icon("home", 12)} ${t("re_metric_cost_to_live")}${reTip("re_tip_cost_to_live")}</div>
           <div class="re-metric__value re-metric__value--big re-metric__value--${costClass}">${m.costToLiveMonthly <= 0 ? "+" : ""}${fmtMoney(Math.abs(m.costToLiveMonthly))}<span class="re-metric__suffix">${t("re_metric_per_month")}</span></div>
           <div class="re-metric__sub">${m.costToLiveMonthly > 0 ? t("re_metric_cost_to_live_neg") : t("re_metric_cost_to_live_pos")}</div>
-          ${renderCashFlowBreakdown(m)}
+          ${renderCashFlowBreakdown(m, a)}
         </div>
       ` : ""}
 
@@ -3308,7 +3399,7 @@ function renderRealEstateResults(a) {
         <div class="re-metric__label">${t("re_metric_cashflow")}${reTip("re_tip_cashflow")}</div>
         <div class="re-metric__value re-metric__value--big re-metric__value--${cfClass}">${fmtMoney(m.monthlyCashFlow)}<span class="re-metric__suffix">${t("re_metric_per_month")}</span></div>
         <div class="re-metric__sub">${fmtMoney(m.annualCashFlow)}${t("re_metric_per_year")}</div>
-        ${renderCashFlowBreakdown(m)}
+        ${renderCashFlowBreakdown(m, a)}
       </div>
 
       <div class="re-metric-row">
@@ -3619,7 +3710,7 @@ function renderProjectionTable(a, years) {
 }
 
 // Génère le détail mensuel du cash flow (loyers − toutes les dépenses − hypothèque)
-function renderCashFlowBreakdown(m) {
+function renderCashFlowBreakdown(m, a) {
   const rows = [];
   // Revenus
   if (m.grossMonthlyRent > 0) {
@@ -3634,7 +3725,11 @@ function renderCashFlowBreakdown(m) {
   if (m.schoolTax > 0)    rows.push({ label: t("re_cf_school_tax"),    value: -m.schoolTax / 12,    kind: "expense" });
   if (m.insurance > 0)    rows.push({ label: t("re_cf_insurance"),     value: -m.insurance / 12,    kind: "expense" });
   if (m.electricityMo > 0) rows.push({ label: t("re_cf_electricity"),  value: -m.electricityMo,     kind: "expense" });
-  if (m.otherServiceMo > 0) rows.push({ label: t("re_cf_other_service"), value: -m.otherServiceMo,  kind: "expense" });
+  if (m.otherServiceMo > 0) {
+    // Utilise le nom personnalisé saisi par l'utilisateur si disponible
+    const otherLabel = (a && a.otherServiceName && a.otherServiceName.trim()) ? a.otherServiceName.trim() : t("re_cf_other_service");
+    rows.push({ label: otherLabel, value: -m.otherServiceMo, kind: "expense" });
+  }
   if (m.maintenance > 0)  rows.push({ label: t("re_cf_maintenance"),   value: -m.maintenance / 12,  kind: "expense" });
   if (m.management > 0)   rows.push({ label: t("re_cf_management"),    value: -m.management / 12,   kind: "expense" });
   // Service de la dette
