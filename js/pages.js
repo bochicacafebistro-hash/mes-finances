@@ -1912,6 +1912,8 @@ function reNewAnalysis() {
     mrbTargetExcellent: 10,    // MRB max pour qualifier d'"excellent" investissement
     // Simulateur de prix d'offre — cash flow mensuel souhaité (défaut 0 = équilibre)
     simTargetCashFlow: 0,
+    // Coût d'opportunité — taux annuel d'un placement alternatif en bourse (FNB indiciel)
+    stockMarketRate: 7,
     // Frais de clôture (ponctuels, payés à l'achat) — auto-calculés mais modifiables
     welcomeTaxAuto: true,      // si true, recalculer auto selon prix
     welcomeTax: 0,             // taxe de bienvenue Qc
@@ -1989,6 +1991,65 @@ function reEffectiveDownPaymentPercent(a) {
   if (a.downPaymentMode === "percent") return Number(a.downPaymentPercent) || 0;
   if (price <= 0) return 0;
   return ((Number(a.downPayment) || 0) / price) * 100;
+}
+
+// Calcule l'IRR (taux de rendement interne) d'un flux de trésorerie.
+// cashFlows[0] doit être négatif (investissement initial), suivi des CF annuels.
+// Retourne le taux en pourcentage, ou null si impossible à calculer.
+function reIRR(cashFlows) {
+  if (!Array.isArray(cashFlows) || cashFlows.length < 2) return null;
+  // Vérifie qu'il y a au moins un négatif et un positif
+  const hasNeg = cashFlows.some(c => c < 0);
+  const hasPos = cashFlows.some(c => c > 0);
+  if (!hasNeg || !hasPos) return null;
+  // Newton-Raphson : start avec 10% comme guess
+  let r = 0.10;
+  const maxIter = 200;
+  for (let iter = 0; iter < maxIter; iter++) {
+    let npv = 0, dnpv = 0;
+    for (let t = 0; t < cashFlows.length; t++) {
+      const cf = cashFlows[t];
+      const denom = Math.pow(1 + r, t);
+      if (!isFinite(denom) || denom === 0) { return null; }
+      npv += cf / denom;
+      if (t > 0) dnpv -= t * cf / (denom * (1 + r));
+    }
+    if (Math.abs(dnpv) < 1e-12) break;
+    const rNew = r - npv / dnpv;
+    // Floor à -99% pour éviter divergence
+    const rClamped = Math.max(-0.99, Math.min(10, rNew));
+    if (Math.abs(rClamped - r) < 1e-8) { r = rClamped; break; }
+    r = rClamped;
+  }
+  if (!isFinite(r)) return null;
+  return r * 100;
+}
+
+// Calcule le tableau d'amortissement (12 premiers paiements mensuels) pour la 1ère année.
+function reAmortizationFirstYear(principal, annualRatePct, years) {
+  if (!principal || principal <= 0 || !years) return [];
+  const i = Math.pow(1 + annualRatePct / 100 / 2, 2 / 12) - 1;
+  const n = years * 12;
+  if (i === 0) {
+    const PMT = principal / n;
+    let balance = principal;
+    const rows = [];
+    for (let m = 1; m <= 12; m++) {
+      balance -= PMT;
+      rows.push({ month: m, payment: PMT, interest: 0, principalPaid: PMT, balance: Math.max(0, balance) });
+    }
+    return rows;
+  }
+  const PMT = principal * i / (1 - Math.pow(1 + i, -n));
+  let balance = principal;
+  const rows = [];
+  for (let m = 1; m <= 12; m++) {
+    const interest = balance * i;
+    const principalPaid = PMT - interest;
+    balance -= principalPaid;
+    rows.push({ month: m, payment: PMT, interest, principalPaid, balance: Math.max(0, balance) });
+  }
+  return rows;
 }
 
 // Calcule l'intérêt total payé sur la 1ère année d'hypothèque (utile pour fiscalité).
@@ -2188,6 +2249,9 @@ function calculateRealEstateMetrics(a) {
   const breakEvenOccupancy = (grossAnnualRent > 0)
     ? ((totalOpex + annualMortgageStd) / grossAnnualRent) * 100
     : null;
+  // Ratio de charges opérationnelles (RDR) : opex / loyers bruts × 100
+  // Standard : <40% bon, 40-50% moyen, >50% élevé. N'inclut pas l'hypothèque.
+  const operatingExpenseRatio = (grossAnnualRent > 0) ? (totalOpex / grossAnnualRent) * 100 : null;
   // Verdict — si propriétaire-occupant, l'évaluation est différente (on ne juge pas sur cash flow seul)
   let verdict = "unknown";
   if (hasOwnerOccupied) {
@@ -2219,7 +2283,7 @@ function calculateRealEstateMetrics(a) {
     annualMortgageStd, annualCashFlow, monthlyCashFlow,
     costToLiveMonthly,
     capRate, mrb,
-    dscr, cashOnCash, breakEvenOccupancy,
+    dscr, cashOnCash, breakEvenOccupancy, operatingExpenseRatio,
     stressMonthlyPmt, stressMonthlyCashFlow,
     hasOwnerOccupied, ownerOccupiedCount: ownerOccupiedUnits.length, rentingUnitsCount: rentingUnits.length,
     verdict
@@ -2721,6 +2785,7 @@ function projectRealEstate(a, years) {
   let cumGrossRent = 0;
   let cumNOI = 0;
   let cumCashFlow = 0;
+  const yearlyCashFlows = []; // pour le calcul d'IRR
   for (let y = 1; y <= years; y++) {
     const g = Math.pow(1 + rentRate, y - 1);
     const yGrossRent   = base.grossAnnualRent * g;
@@ -2741,6 +2806,7 @@ function projectRealEstate(a, years) {
     cumGrossRent += yGrossRent;
     cumNOI += yNOI;
     cumCashFlow += yCashFlow;
+    yearlyCashFlows.push(yCashFlow);
   }
 
   // Équité finale et rendement annualisé (CAGR)
@@ -2759,13 +2825,35 @@ function projectRealEstate(a, years) {
     }
   }
 
+  // IRR : flux de trésorerie = -investissement initial puis CF annuels + équité finale au dernier
+  // Investissement initial = cash requis à la clôture (mise de fond + tous frais)
+  const initialInvestment = base.cashToClose || base.downPayment;
+  const irrCashFlows = [-initialInvestment];
+  for (let y = 0; y < yearlyCashFlows.length; y++) {
+    if (y === yearlyCashFlows.length - 1) {
+      // Année finale : cash flow + valeur récupérée si vendu (équité)
+      irrCashFlows.push(yearlyCashFlows[y] + equity);
+    } else {
+      irrCashFlows.push(yearlyCashFlows[y]);
+    }
+  }
+  const irr = reIRR(irrCashFlows);
+
+  // Coût d'opportunité — si la mise de fond + frais avait été placée en bourse
+  const stockRate = (Number(a.stockMarketRate) || 0) / 100;
+  const stockEndValue = initialInvestment * Math.pow(1 + stockRate, years);
+  const stockProfit = stockEndValue - initialInvestment;
+  const realEstateAdvantage = totalWealth - stockEndValue;
+
   return {
     years,
     futureValue, appreciationGain, mortgageBalance, principalPaidDown,
     equity, equityNetGain,
     cumGrossRent, cumNOI, cumCashFlow,
     totalWealth, totalProfit,
-    annualizedReturn,
+    annualizedReturn, irr,
+    stockEndValue, stockProfit, realEstateAdvantage, stockRate: stockRate * 100,
+    initialInvestment, yearlyCashFlows,
     fullyPaidOff: years >= amortYears
   };
 }
@@ -3161,6 +3249,14 @@ function renderRealEstateEdit() {
               <span>${t("re_field_mrb_excellent")}${reTip("re_tip_mrb_excellent")}</span>
               <input type="number" inputmode="decimal" min="3" max="30" step="any" value="${a.mrbTargetExcellent ?? 10}" oninput="reCurrent.mrbTargetExcellent=Math.min(30,Math.max(3,Number(this.value)||10));reRefresh()">
               <small class="re-hint">${t("re_field_mrb_excellent_hint")}</small>
+            </label>
+            <label class="re-field re-field--wide">
+              <span>${t("re_field_stock_rate")}${reTip("re_tip_stock_rate")}</span>
+              <div class="re-input-suffix">
+                <input type="number" inputmode="decimal" min="-10" max="30" step="any" value="${a.stockMarketRate ?? 7}" oninput="reCurrent.stockMarketRate=Math.min(30,Math.max(-10,Number(this.value)||0));reRefresh()">
+                <span class="re-input-suffix__symbol">% /an</span>
+              </div>
+              <small class="re-hint">${t("re_field_stock_rate_hint")}</small>
             </label>
           </div>
         </section>
@@ -3712,10 +3808,17 @@ function renderRealEstateResults(a) {
         </div>
       </div>
 
-      <div class="re-metric">
-        <div class="re-metric__label">${t("re_metric_breakeven")}${reTip("re_tip_breakeven")}</div>
-        <div class="re-metric__value ${m.breakEvenOccupancy !== null && m.breakEvenOccupancy > 95 ? "re-metric__value--neg" : (m.breakEvenOccupancy !== null && m.breakEvenOccupancy < 85 ? "re-metric__value--pos" : "")}">${m.breakEvenOccupancy === null ? "—" : m.breakEvenOccupancy.toFixed(1) + "%"}</div>
-        <div class="re-metric__sub">${t("re_metric_breakeven_sub")}</div>
+      <div class="re-metric-row">
+        <div class="re-metric">
+          <div class="re-metric__label">${t("re_metric_breakeven")}${reTip("re_tip_breakeven")}</div>
+          <div class="re-metric__value ${m.breakEvenOccupancy !== null && m.breakEvenOccupancy > 95 ? "re-metric__value--neg" : (m.breakEvenOccupancy !== null && m.breakEvenOccupancy < 85 ? "re-metric__value--pos" : "")}">${m.breakEvenOccupancy === null ? "—" : m.breakEvenOccupancy.toFixed(1) + "%"}</div>
+          <div class="re-metric__sub">${t("re_metric_breakeven_sub")}</div>
+        </div>
+        <div class="re-metric">
+          <div class="re-metric__label">${t("re_metric_oer")}${reTip("re_tip_oer")}</div>
+          <div class="re-metric__value ${m.operatingExpenseRatio !== null && m.operatingExpenseRatio > 50 ? "re-metric__value--neg" : (m.operatingExpenseRatio !== null && m.operatingExpenseRatio < 40 ? "re-metric__value--pos" : "")}">${m.operatingExpenseRatio === null ? "—" : m.operatingExpenseRatio.toFixed(1) + "%"}</div>
+          <div class="re-metric__sub">${t("re_metric_oer_sub")}</div>
+        </div>
       </div>
 
       <div class="re-metric">
@@ -3725,6 +3828,7 @@ function renderRealEstateResults(a) {
           <div><span>${t("re_metric_mortgage_biw")}</span><strong>${fmtMoney(m.biweeklyPmt)}</strong></div>
           <div><span>${t("re_metric_mortgage_wkl")}</span><strong>${fmtMoney(m.weeklyPmt)}</strong></div>
         </div>
+        ${renderAmortizationTable(a, m)}
       </div>
 
       <div class="re-metric">
@@ -3908,11 +4012,18 @@ function renderRealEstateProjection(a, years) {
         </div>
       </div>
 
-      <div class="re-proj-return re-proj-return--${returnClass}">
-        <div class="re-proj-return__label">${t("re_proj_annualized_return")}</div>
-        <div class="re-proj-return__value">${p.annualizedReturn === null ? "—" : p.annualizedReturn.toFixed(2) + "%"}<span class="re-proj-return__suffix">/an</span></div>
-        <div class="re-proj-return__hint">${t("re_proj_annualized_hint").replace("{dp}", fmtMoney(calculateRealEstateMetrics(a).downPayment))}</div>
+      <div class="re-proj-returns-row">
+        <div class="re-proj-return re-proj-return--${returnClass}">
+          <div class="re-proj-return__label">${t("re_proj_annualized_return")}${reTip("re_tip_cagr")}</div>
+          <div class="re-proj-return__value">${p.annualizedReturn === null ? "—" : p.annualizedReturn.toFixed(2) + "%"}<span class="re-proj-return__suffix">/an</span></div>
+        </div>
+        <div class="re-proj-return ${p.irr !== null && p.irr >= 0 ? "re-proj-return--pos" : "re-proj-return--neg"}">
+          <div class="re-proj-return__label">${t("re_proj_irr")}${reTip("re_tip_irr")}</div>
+          <div class="re-proj-return__value">${p.irr === null ? "—" : p.irr.toFixed(2) + "%"}<span class="re-proj-return__suffix">/an</span></div>
+        </div>
       </div>
+
+      ${renderStockComparison(p, a)}
     </div>
   `;
 }
@@ -4006,6 +4117,54 @@ function renderProjectionTable(a, years) {
   `;
 }
 
+// Tableau d'amortissement 12 mois année 1 (intérêt vs capital chaque paiement)
+function renderAmortizationTable(a, m) {
+  if (!m || !m.principal || m.principal <= 0) return "";
+  const rows = reAmortizationFirstYear(m.principal, a.interestRate, a.amortYears);
+  if (!rows.length) return "";
+  const totalInterest = rows.reduce((s, r) => s + r.interest, 0);
+  const totalPrincipal = rows.reduce((s, r) => s + r.principalPaid, 0);
+  return `
+    <details class="re-amort-table">
+      <summary class="re-amort-table__summary">
+        <span>${icon("clipboard", 12)} ${t("re_amort_title")}</span>
+        <span class="re-verdict-details__chevron">▾</span>
+      </summary>
+      <div class="re-amort-table__body">
+        <div class="re-amort-table__totals">
+          <div><span>${t("re_amort_year_interest")}</span><strong>${fmtMoney(totalInterest)}</strong></div>
+          <div><span>${t("re_amort_year_principal")}</span><strong>${fmtMoney(totalPrincipal)}</strong></div>
+        </div>
+        <div class="re-table-wrap__scroll">
+          <table class="re-table">
+            <thead>
+              <tr>
+                <th>${t("re_amort_month")}</th>
+                <th>${t("re_amort_payment")}</th>
+                <th>${t("re_amort_interest")}</th>
+                <th>${t("re_amort_principal")}</th>
+                <th>${t("re_amort_balance")}</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${rows.map(r => `
+                <tr>
+                  <td class="re-table__year">${r.month}</td>
+                  <td>${fmtMoneyCompact(r.payment)}</td>
+                  <td class="re-table__neg">${fmtMoneyCompact(r.interest)}</td>
+                  <td class="re-table__pos">${fmtMoneyCompact(r.principalPaid)}</td>
+                  <td>${fmtMoneyCompact(r.balance)}</td>
+                </tr>
+              `).join("")}
+            </tbody>
+          </table>
+        </div>
+        <small class="re-hint">${t("re_amort_note")}</small>
+      </div>
+    </details>
+  `;
+}
+
 // Génère le détail mensuel du cash flow (loyers − toutes les dépenses − hypothèque)
 function renderCashFlowBreakdown(m, a) {
   const rows = [];
@@ -4065,6 +4224,37 @@ function fmtMoneyCompact(n) {
   if (abs >= 1e4) return `${sign}${(abs / 1e3).toFixed(0)} k$`;
   if (abs >= 1e3) return `${sign}${(abs / 1e3).toFixed(1)} k$`;
   return `${sign}${abs.toFixed(0)} $`;
+}
+
+// Carte de comparaison vs placement en bourse (FNB indiciel, etc.)
+function renderStockComparison(p, a) {
+  if (!p || p.initialInvestment <= 0) return "";
+  const reAdv = p.realEstateAdvantage;
+  const reAdvPct = p.stockEndValue > 0 ? (reAdv / p.stockEndValue) * 100 : 0;
+  const isAdvantage = reAdv >= 0;
+  return `
+    <div class="re-stock-cmp">
+      <div class="re-stock-cmp__title">${icon("trending-up", 12)} ${t("re_stock_title")}</div>
+      <div class="re-stock-cmp__rows">
+        <div class="re-stock-cmp__row">
+          <span class="re-stock-cmp__label">${t("re_stock_initial")}</span>
+          <span class="re-stock-cmp__value">${fmtMoney(p.initialInvestment)}</span>
+        </div>
+        <div class="re-stock-cmp__row">
+          <span class="re-stock-cmp__label">${t("re_stock_at_rate").replace("{rate}", (p.stockRate || 0).toFixed(1))}</span>
+          <span class="re-stock-cmp__value">${fmtMoney(p.stockEndValue)}</span>
+        </div>
+        <div class="re-stock-cmp__row">
+          <span class="re-stock-cmp__label">${t("re_stock_real_estate")}</span>
+          <span class="re-stock-cmp__value">${fmtMoney(p.totalWealth)}</span>
+        </div>
+        <div class="re-stock-cmp__row re-stock-cmp__row--total ${isAdvantage ? "re-stock-cmp__row--pos" : "re-stock-cmp__row--neg"}">
+          <span class="re-stock-cmp__label">${isAdvantage ? t("re_stock_re_wins") : t("re_stock_bourse_wins")}</span>
+          <span class="re-stock-cmp__value">${reAdv >= 0 ? "+" : "−"}${fmtMoney(Math.abs(reAdv))} (${reAdvPct >= 0 ? "+" : ""}${reAdvPct.toFixed(1)}%)</span>
+        </div>
+      </div>
+    </div>
+  `;
 }
 
 function reSetProjectionYears(years) {

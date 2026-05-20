@@ -250,6 +250,37 @@ const TRANSLATIONS = {
   re_freq_mo_short:      { fr: "/mois",                         es: "/mes" },
   re_freq_an_short:      { fr: "/an",                           es: "/año" },
   re_freq_real_duration: { fr: "Durée réelle",                  es: "Duración real" },
+
+  // ── Coût d'opportunité vs bourse ──────────────────
+  re_field_stock_rate:   { fr: "Rendement bourse (placement alternatif)", es: "Rendimiento bolsa (inversión alternativa)" },
+  re_tip_stock_rate:     { fr: "Taux annuel d'un placement alternatif (FNB indiciel S&P 500, REER). Sert à comparer le rendement de l'immobilier vs le marché boursier. 7% = moyenne historique long terme.", es: "Tasa anual de inversión alternativa (ETF indexado). 7% = promedio histórico." },
+  re_field_stock_rate_hint:{ fr: "Long terme S&P 500 : ~10% nominal. Conservateur : 6-7%. CELI : libre d'impôt.", es: "Largo plazo S&P 500: ~10%. Conservador: 6-7%." },
+  re_stock_title:        { fr: "Comparaison vs placement en bourse", es: "Comparación vs inversión en bolsa" },
+  re_stock_initial:      { fr: "Investissement initial (MF + frais clôture)", es: "Inversión inicial (aporte + cierre)" },
+  re_stock_at_rate:      { fr: "Si placé en bourse à {rate}%/an", es: "Si invertido en bolsa a {rate}%/año" },
+  re_stock_real_estate:  { fr: "Patrimoine immobilier (équité + cash flow)", es: "Patrimonio inmobiliario" },
+  re_stock_re_wins:      { fr: "L'immobilier rapporte plus",    es: "El inmobiliario gana más" },
+  re_stock_bourse_wins:  { fr: "La bourse rapporte plus",       es: "La bolsa gana más" },
+
+  // ── Métriques additionnelles ──────────────────────
+  re_metric_oer:         { fr: "Ratio charges/loyers (RDR)",    es: "Ratio gastos/alquileres" },
+  re_tip_oer:            { fr: "Ratio des charges opérationnelles : opex / loyers bruts × 100. Indicateur d'efficacité de l'immeuble (n'inclut PAS l'hypothèque). <40% = bon, 40-50% = moyen, >50% = élevé (immeuble énergivore ou mal géré).", es: "Ratio gastos operativos / alquileres brutos. <40% bueno, 40-50% medio, >50% alto." },
+  re_metric_oer_sub:     { fr: "Efficacité opérationnelle (hors hypothèque)", es: "Eficiencia operativa (sin hipoteca)" },
+
+  re_proj_irr:           { fr: "Rendement IRR",                 es: "Rendimiento TIR" },
+  re_tip_cagr:           { fr: "CAGR (Compound Annual Growth Rate) : taux moyen composé sur la période, basé sur patrimoine final / investissement initial. Plus simple à interpréter, mais ignore le timing des cash flows.", es: "CAGR: tasa promedio compuesta. Simple pero ignora el timing." },
+  re_tip_irr:            { fr: "IRR (Internal Rate of Return) : taux qui rend la VAN = 0. Tient compte du TIMING exact des cash flows année par année. Plus précis que le CAGR pour les investissements à cash flow variable. Si CAGR > IRR, ton patrimoine vient surtout de l'appréciation finale. Si IRR > CAGR, tes cash flows annuels positifs aident.", es: "TIR (Tasa Interna de Retorno): considera el timing exacto de los flujos. Más preciso que CAGR." },
+
+  // ── Tableau d'amortissement année 1 ───────────────
+  re_amort_title:        { fr: "Tableau d'amortissement (12 premiers mois)", es: "Tabla de amortización (12 primeros meses)" },
+  re_amort_month:        { fr: "Mois",                          es: "Mes" },
+  re_amort_payment:      { fr: "Paiement",                      es: "Pago" },
+  re_amort_interest:     { fr: "Intérêts",                      es: "Intereses" },
+  re_amort_principal:    { fr: "Capital",                       es: "Capital" },
+  re_amort_balance:      { fr: "Solde",                         es: "Saldo" },
+  re_amort_year_interest:{ fr: "Total intérêts payés (an 1)",   es: "Total intereses pagados (año 1)" },
+  re_amort_year_principal:{ fr: "Total capital remboursé (an 1)", es: "Total capital pagado (año 1)" },
+  re_amort_note:         { fr: "Au début, presque tout va aux intérêts. Avec le temps, la portion capital augmente. C'est l'amortissement standard.", es: "Al principio, casi todo va a intereses; con el tiempo aumenta el capital." },
   re_field_maint_pct_suffix:{ fr: "% des loyers",                es: "% alquileres" },
   re_field_vacancy_enable:{ fr: "Inclure",                      es: "Incluir" },
   re_field_vacancy_ignored:{ fr: "Vacance ignorée dans les calculs", es: "Vacancia ignorada en los cálculos" },

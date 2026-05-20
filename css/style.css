@@ -5103,6 +5103,148 @@ h1, h2, h3, h4 {
   .re-proj-grid { grid-template-columns: 1fr; }
 }
 
+/* Rendement annualisé + IRR côte à côte */
+.re-proj-returns-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: var(--sp-2);
+  margin-top: var(--sp-2);
+}
+.re-proj-returns-row .re-proj-return {
+  margin-top: 0;
+  padding: var(--sp-3);
+}
+.re-proj-returns-row .re-proj-return__value {
+  font-size: var(--fs-2xl);
+}
+@media (max-width: 500px) {
+  .re-proj-returns-row { grid-template-columns: 1fr; }
+}
+
+/* Comparaison vs bourse */
+.re-stock-cmp {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-left: 4px solid #8b5cf6;
+  border-radius: var(--radius-lg);
+  padding: var(--sp-4);
+  margin-top: var(--sp-2);
+}
+.re-stock-cmp__title {
+  font-size: var(--fs-xs);
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: #8b5cf6;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: var(--sp-3);
+}
+.re-stock-cmp__rows {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.re-stock-cmp__row {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  padding: 4px 0;
+  font-size: var(--fs-sm);
+}
+.re-stock-cmp__label {
+  color: var(--text2);
+  font-weight: 500;
+}
+.re-stock-cmp__value {
+  font-weight: 700;
+  color: var(--text);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+.re-stock-cmp__row--total {
+  border-top: 1.5px solid var(--border-strong);
+  padding-top: 8px;
+  margin-top: 4px;
+}
+.re-stock-cmp__row--total .re-stock-cmp__label {
+  font-weight: 800;
+  text-transform: uppercase;
+  font-size: var(--fs-xs);
+  letter-spacing: 0.4px;
+  color: var(--text);
+}
+.re-stock-cmp__row--total .re-stock-cmp__value {
+  font-size: var(--fs-md);
+}
+.re-stock-cmp__row--pos .re-stock-cmp__value { color: var(--status-green); }
+.re-stock-cmp__row--neg .re-stock-cmp__value { color: var(--status-red); }
+
+/* Tableau d'amortissement année 1 */
+.re-amort-table {
+  margin-top: var(--sp-3);
+  background: var(--surface2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  overflow: hidden;
+}
+.re-amort-table__summary {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--sp-2);
+  padding: var(--sp-2) var(--sp-3);
+  cursor: pointer;
+  font-size: var(--fs-xs);
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.4px;
+  color: var(--text2);
+  user-select: none;
+  list-style: none;
+}
+.re-amort-table__summary::-webkit-details-marker { display: none; }
+.re-amort-table__summary::marker { content: ""; }
+.re-amort-table__summary:hover { background: var(--surface3); color: var(--text); }
+.re-amort-table[open] .re-amort-table__summary {
+  border-bottom: 1px solid var(--border);
+  background: var(--surface3);
+  color: var(--text);
+}
+.re-amort-table[open] .re-verdict-details__chevron { transform: rotate(180deg); }
+.re-amort-table__body {
+  padding: var(--sp-3);
+}
+.re-amort-table__totals {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: var(--sp-2);
+  margin-bottom: var(--sp-3);
+}
+.re-amort-table__totals > div {
+  background: var(--surface);
+  padding: 8px 10px;
+  border-radius: var(--radius-sm);
+  font-size: var(--fs-xs);
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.re-amort-table__totals span {
+  color: var(--text3);
+  text-transform: uppercase;
+  letter-spacing: 0.3px;
+  font-weight: 600;
+  font-size: 10px;
+}
+.re-amort-table__totals strong {
+  color: var(--text);
+  font-weight: 800;
+  font-size: var(--fs-md);
+  font-variant-numeric: tabular-nums;
+}
+
 /* Responsive */
 @media (max-width: 900px) {
   .re-grid { grid-template-columns: 1fr; }
