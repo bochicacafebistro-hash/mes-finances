@@ -590,7 +590,7 @@ async function saveAccount(id) {
     currency: DEFAULT_CURRENCY
   };
   if (id) await db.collection("accounts").doc(id).update(data);
-  else { const nid = genId(); await db.collection("accounts").doc(nid).set({ ...data, id: nid, sortOrder: accounts.length }); }
+  else { const nid = genId(); await db.collection("accounts").doc(nid).set({ ...data, id: nid, sortOrder: accounts.length, userId: currentUserId }); }
   closeModal();
 }
 
@@ -918,7 +918,7 @@ async function saveTransaction(id) {
   if (id) await db.collection("transactions").doc(id).update(data);
   else {
     const nid = genId();
-    await db.collection("transactions").doc(nid).set({ ...data, id: nid, createdAt: firebase.firestore.FieldValue.serverTimestamp() });
+    await db.collection("transactions").doc(nid).set({ ...data, id: nid, userId: currentUserId, createdAt: firebase.firestore.FieldValue.serverTimestamp() });
   }
   closeModal();
 
@@ -1008,7 +1008,7 @@ function renderCategoryCard(c) {
 async function initDefaultCategories() {
   for (const c of [...DEFAULT_EXPENSE_CATEGORIES, ...DEFAULT_INCOME_CATEGORIES]) {
     const id = genId();
-    await db.collection("categories").doc(id).set({ ...c, id });
+    await db.collection("categories").doc(id).set({ ...c, id, userId: currentUserId });
   }
   alert(t("cat_init_done"));
 }
@@ -1066,7 +1066,7 @@ async function saveCategory(id) {
     await db.collection("categories").doc(id).update(data);
   } else {
     newId = genId();
-    await db.collection("categories").doc(newId).set({ ...data, id: newId });
+    await db.collection("categories").doc(newId).set({ ...data, id: newId, userId: currentUserId });
   }
   closeModal();
 
@@ -1501,7 +1501,7 @@ async function saveBudget(categoryId, existingId) {
     await db.collection("budgets").doc(existingId).update(data);
   } else {
     const nid = genId();
-    await db.collection("budgets").doc(nid).set({ ...data, id: nid, createdAt: firebase.firestore.FieldValue.serverTimestamp() });
+    await db.collection("budgets").doc(nid).set({ ...data, id: nid, userId: currentUserId, createdAt: firebase.firestore.FieldValue.serverTimestamp() });
   }
   closeModal();
 }
@@ -1840,7 +1840,7 @@ async function confirmSubscription(key, name, amount, frequency, accountId, cate
     await db.collection("subscriptions").doc(existing.id).update(data);
   } else {
     const nid = genId();
-    await db.collection("subscriptions").doc(nid).set({ ...data, id: nid, createdAt: firebase.firestore.FieldValue.serverTimestamp() });
+    await db.collection("subscriptions").doc(nid).set({ ...data, id: nid, userId: currentUserId, createdAt: firebase.firestore.FieldValue.serverTimestamp() });
   }
 }
 
@@ -1851,7 +1851,7 @@ async function ignoreSubscription(key, name) {
   } else {
     const nid = genId();
     await db.collection("subscriptions").doc(nid).set({
-      id: nid, key, name, status: "ignored",
+      id: nid, key, name, status: "ignored", userId: currentUserId,
       createdAt: firebase.firestore.FieldValue.serverTimestamp()
     });
   }
@@ -4504,6 +4504,8 @@ async function reSave() {
   const now = Date.now();
   const payload = { ...reCurrent, updatedAt: now };
   if (!payload.createdAt) payload.createdAt = now;
+  // Multi-usagers : assure que le doc est lié à l'usager courant
+  if (!payload.userId) payload.userId = currentUserId;
   if (reCurrent.id) {
     const id = reCurrent.id;
     delete payload.id;

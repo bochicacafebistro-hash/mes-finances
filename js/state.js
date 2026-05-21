@@ -24,6 +24,9 @@ let reProjectionYears = 10; // durée affichée dans le bloc Projection (modifia
 let reCompareIds = [];     // ids des analyses sélectionnées pour comparaison
 
 let isLoggedIn = false, isAdmin = false, pinBuffer = "", darkMode = false;
+// Usager actuellement connecté — détermine quelle vue de données est affichée
+let currentUserId = null;     // ex: "alvaro" — utilisé pour filtrer/écrire les docs Firestore
+let currentUserName = null;   // ex: "Alvaro" — affiché dans la sidebar
 let activePage = "dashboard";
 let sidebarOpen = true;
 let pendingConfirm = null, openDropId = null;

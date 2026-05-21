@@ -12,7 +12,18 @@ firebase.initializeApp(firebaseConfig);
 const db = firebase.firestore();
 
 // ── Constantes globales ────────────────────────────
-const ADMIN_PIN = "8902"; // PIN de connexion personnel
+// Liste des usagers : chacun a son propre PIN, ses propres données isolées.
+// Pour ajouter un usager : ajoute une entrée ici avec un id unique, un PIN à 4 chiffres et un nom.
+// L'id ne doit JAMAIS être changé après création (sinon les données sont perdues).
+// Le premier usager est l'usager "héritage" — les données existantes sans userId lui appartiennent.
+const USERS = [
+  { id: "alvaro",  pin: "8902", name: "Alvaro" },
+  // Exemple — change le PIN et le nom puis décommente la ligne :
+  // { id: "user2", pin: "1234", name: "Mon partenaire" },
+];
+
+// Compat descendante (anciens fichiers qui peuvent encore référencer ADMIN_PIN)
+const ADMIN_PIN = USERS[0]?.pin || "0000";
 
 // Types de comptes par défaut
 const ACCOUNT_TYPES = [

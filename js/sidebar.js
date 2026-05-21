@@ -33,8 +33,11 @@ function buildSidebar() {
   }
   const logoutBtn = document.getElementById("logout-btn");
   if (logoutBtn) {
-    logoutBtn.innerHTML = icon("log-out", 14) + ` <span>${t("logout")}</span>`;
+    // Affiche le nom de l'usager connecté à côté de l'icône de déconnexion
+    const userLabel = currentUserName ? ` <span style="margin-right:6px;opacity:0.85">${esc(currentUserName)}</span>` : "";
+    logoutBtn.innerHTML = userLabel + icon("log-out", 14) + ` <span>${t("logout")}</span>`;
     logoutBtn.setAttribute("aria-label", t("logout"));
+    logoutBtn.setAttribute("title", currentUserName ? `${currentUserName} — ${t("logout")}` : t("logout"));
   }
   const langBtn = document.getElementById("lang-btn");
   if (langBtn) {

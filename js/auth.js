@@ -1,15 +1,21 @@
 // ── Session ───────────────────────────────────────────
 function restoreSession() {
-  const saved = localStorage.getItem("finances-session");
-  if (saved === "ok") {
-    isLoggedIn = true;
-    isAdmin = true;
-    document.getElementById("login-screen").style.display = "none";
-    document.getElementById("app-shell").style.display = "block";
-    buildSidebar(); renderPage();
-    return true;
+  const savedUserId = localStorage.getItem("finances-user-id");
+  if (!savedUserId) return false;
+  const user = USERS.find(u => u.id === savedUserId);
+  if (!user) {
+    // Usager supprimé/renommé entre temps — clear la session
+    localStorage.removeItem("finances-user-id");
+    return false;
   }
-  return false;
+  isLoggedIn = true;
+  isAdmin = true;
+  currentUserId = user.id;
+  currentUserName = user.name;
+  document.getElementById("login-screen").style.display = "none";
+  document.getElementById("app-shell").style.display = "block";
+  buildSidebar(); renderPage();
+  return true;
 }
 
 // ── Login ─────────────────────────────────────────────
@@ -62,7 +68,12 @@ document.addEventListener("keydown", (e) => {
 
 function logout() {
   isLoggedIn = false; isAdmin = false; pinBuffer = "";
-  localStorage.removeItem("finances-session");
+  currentUserId = null;
+  currentUserName = null;
+  localStorage.removeItem("finances-user-id");
+  localStorage.removeItem("finances-session"); // compat ancienne clé
+  // Vider les arrays de données en mémoire (sinon l'usager suivant voit ceux du précédent un instant)
+  accounts = []; transactions = []; categories = []; budgets = []; subscriptions = []; realEstateAnalyses = [];
   document.getElementById("app-shell").style.display = "none";
   document.getElementById("login-screen").style.display = "block";
   showLogin();
@@ -85,10 +96,14 @@ function updatePinDots() {
 }
 
 function checkPin() {
-  if (pinBuffer === ADMIN_PIN) {
+  // Cherche un usager dont le PIN correspond
+  const user = USERS.find(u => u.pin === pinBuffer);
+  if (user) {
     isLoggedIn = true;
     isAdmin = true;
-    localStorage.setItem("finances-session", "ok");
+    currentUserId = user.id;
+    currentUserName = user.name;
+    localStorage.setItem("finances-user-id", user.id);
     document.getElementById("login-screen").style.display = "none";
     document.getElementById("app-shell").style.display = "block";
     buildSidebar(); renderPage();
