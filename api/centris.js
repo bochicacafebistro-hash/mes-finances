@@ -1,11 +1,11 @@
-// ── Proxy serveur pour les fiches Centris ─────────────────────────────
+// ── Proxy serveur pour fiches immobilières (Centris + DuProprio) ─────
 // Fonction serverless Vercel qui contourne le blocage CORS côté navigateur.
-// L'utilisateur colle une URL Centris dans l'app ; le client appelle
-// /api/centris?url=… qui fetch le HTML côté serveur (où il n'y a pas de
-// restriction CORS) et le retourne au client pour parsing.
+// Accepte les URL de centris.ca ET duproprio.com.
+// Le client appelle /api/centris?url=… qui fetch le HTML côté serveur
+// et le retourne pour parsing côté client.
 //
-// Note : Centris peut bloquer le scraping serveur (Cloudflare, rate
-// limiting). Si ça arrive, l'app a un fallback : coller le HTML manuel.
+// Note : Centris et DuProprio peuvent bloquer le scraping (Cloudflare,
+// rate limiting). Si ça arrive, l'app a un fallback : coller le HTML manuel.
 
 // Vercel Node.js Runtime — handler classique (req, res)
 module.exports = async function handler(req, res) {
@@ -29,8 +29,8 @@ module.exports = async function handler(req, res) {
     return;
   }
 
-  // Validation stricte : seulement les domaines Centris (sécurité — évite
-  // que la fonction soit utilisée comme open proxy général).
+  // Validation stricte : seulement les domaines immobiliers autorisés
+  // (sécurité — évite que la fonction soit utilisée comme open proxy général).
   let parsed;
   try {
     parsed = new URL(rawUrl);
@@ -38,11 +38,12 @@ module.exports = async function handler(req, res) {
     res.status(400).json({ error: "invalid_url", message: "URL invalide." });
     return;
   }
-  const hostOk = /(^|\.)centris\.ca$/i.test(parsed.hostname);
+  const ALLOWED_HOSTS = [/(^|\.)centris\.ca$/i, /(^|\.)duproprio\.com$/i];
+  const hostOk = ALLOWED_HOSTS.some(re => re.test(parsed.hostname));
   if (!hostOk || parsed.protocol !== "https:") {
     res.status(400).json({
-      error: "not_centris",
-      message: "Seules les URL https://www.centris.ca/… sont autorisées."
+      error: "not_allowed_host",
+      message: "Seules les URL https://www.centris.ca/… ou https://duproprio.com/… sont autorisées."
     });
     return;
   }
@@ -76,10 +77,11 @@ module.exports = async function handler(req, res) {
     clearTimeout(timeoutId);
 
     if (!upstream.ok) {
+      const site = /duproprio\.com/i.test(parsed.hostname) ? "DuProprio" : "Centris";
       res.status(502).json({
         error: "upstream_error",
         status: upstream.status,
-        message: "Centris a refusé la requête (statut " + upstream.status + "). Utilise le fallback « coller le HTML »."
+        message: site + " a refusé la requête (statut " + upstream.status + "). Utilise le fallback « coller le HTML »."
       });
       return;
     }
@@ -92,9 +94,10 @@ module.exports = async function handler(req, res) {
     if (lower.includes("cf-browser-verification") ||
         lower.includes("just a moment") ||
         lower.includes("attention required")) {
+      const site = /duproprio\.com/i.test(parsed.hostname) ? "DuProprio" : "Centris";
       res.status(502).json({
         error: "cloudflare_challenge",
-        message: "Centris a renvoyé un défi anti-bot. Utilise le fallback « coller le HTML »."
+        message: site + " a renvoyé un défi anti-bot. Utilise le fallback « coller le HTML »."
       });
       return;
     }

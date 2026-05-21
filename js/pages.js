@@ -4660,8 +4660,27 @@ function openCentrisImportModal(target) {
   }, 100);
 }
 
-// Fetch l'URL Centris via le proxy serverless /api/centris, met le
-// résultat dans le textarea HTML et lance l'analyse automatiquement.
+// Détecte le site immobilier depuis une URL : "centris" | "duproprio" | null
+function detectPropertySite(url) {
+  if (!url) return null;
+  if (/^https?:\/\/([\w-]+\.)*centris\.ca\//i.test(url)) return "centris";
+  if (/^https?:\/\/([\w-]+\.)*duproprio\.com\//i.test(url)) return "duproprio";
+  return null;
+}
+
+// Choisit le bon parseur selon le HTML / la source connue
+function parsePropertyHTML(html, source) {
+  if (source === "duproprio" && typeof parseDuProprioHTML === "function") {
+    return parseDuProprioHTML(html);
+  }
+  if (typeof parseCentrisHTML === "function") {
+    return parseCentrisHTML(html);
+  }
+  return null;
+}
+
+// Fetch l'URL Centris/DuProprio via le proxy serverless /api/centris,
+// met le résultat dans le textarea HTML et lance l'analyse automatiquement.
 async function centrisFetchFromUrl() {
   const inp = document.getElementById("centris-url-input");
   const btn = document.getElementById("centris-fetch-btn");
@@ -4674,12 +4693,15 @@ async function centrisFetchFromUrl() {
     status.textContent = t("centris_import_url_required");
     return;
   }
-  // Validation côté client : doit être une URL Centris
-  if (!/^https?:\/\/([\w-]+\.)*centris\.ca\//i.test(url)) {
+  // Validation côté client : doit être une URL Centris ou DuProprio
+  const site = detectPropertySite(url);
+  if (!site) {
     status.style.color = "var(--status-red)";
     status.textContent = t("centris_import_url_invalid");
     return;
   }
+  // Stocke la source détectée pour que centrisAnalyze utilise le bon parseur
+  window._propertySource = site;
   btn.disabled = true;
   status.style.color = "var(--text3)";
   status.textContent = t("centris_import_url_loading");
@@ -4726,7 +4748,20 @@ function centrisAnalyze() {
     previewEl.innerHTML = `<div class="centris-warn">${t("centris_import_parser_missing")}</div>`;
     return;
   }
-  const parsed = parseCentrisHTML(html);
+  // Détermine la source : 1) source forcée par centrisFetchFromUrl,
+  // 2) détection auto dans le HTML (Centris a "centris.ca", DuProprio a "duproprio.com").
+  let source = window._propertySource || null;
+  if (!source) {
+    if (/duproprio\.com/i.test(html)) source = "duproprio";
+    else if (/centris\.ca/i.test(html)) source = "centris";
+    else source = "centris"; // défaut
+  }
+  const parsed = parsePropertyHTML(html, source);
+  if (!parsed) {
+    previewEl.innerHTML = `<div class="centris-warn">${t("centris_import_parser_missing")}</div>`;
+    return;
+  }
+  parsed._source = parsed._source || source;
   window._centrisParsedResult = parsed;
   // Confiance : 0-30 rouge, 30-60 orange, 60+ vert
   const conf = parsed._confidence;

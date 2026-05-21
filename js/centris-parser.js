@@ -741,4 +741,17 @@
   window.applyCentrisToRentalAnalysis = applyCentrisToRentalAnalysis;
   window.applyCentrisToHouseAnalysis = applyCentrisToHouseAnalysis;
   window.classifyCentrisType = classifyPropertyType;
+
+  // Helpers partagés pour d'autres parseurs (DuProprio, etc.)
+  window._propertyHelpers = {
+    parseMoney,
+    parseArea,
+    parseYear,
+    classifyPropertyType,
+    findValueByLabel,
+    findValueInSection,
+    cleanTypeText,
+    buildAnalysisName,
+    unitTypeFromTypeText
+  };
 })();
