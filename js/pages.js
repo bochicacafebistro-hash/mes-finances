@@ -2874,6 +2874,7 @@ function renderRealEstateList() {
       </div>
       <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">
         ${selectedCount >= 2 ? `<button class="btn-pill re-compare-btn" onclick="reStartCompare()">${icon("clipboard", 14)} ${t("re_compare").replace("{n}", selectedCount)}</button>` : ""}
+        <button class="btn-pill" onclick="reNewFromCentris()">${icon("download", 14)} ${t("re_import_centris")}</button>
         <button class="btn-pill" onclick="reNew()">${icon("plus", 14)} ${t("re_add")}</button>
       </div>
     </div>`;
@@ -3047,6 +3048,7 @@ function renderRealEstateEdit() {
         <h1 class="serene-hero-h1" style="margin:4px 0 0">${a.id ? (esc(a.name) || t("re_add")) : t("re_add")}</h1>
       </div>
       <div style="display:flex;gap:8px;flex-wrap:wrap">
+        <button class="btn btn-secondary" onclick="openCentrisImportModal('rental')">${icon("download", 14)} ${t("re_import_centris")}</button>
         ${a.id ? `<button class="btn btn-secondary" onclick="reExportPDF()">${icon("download", 14)} ${t("re_export_pdf")}</button>` : ``}
         ${a.id ? `<button class="btn re-btn-danger" onclick="reDelete('${a.id}')">${icon("trash", 14)} ${t("re_delete")}</button>` : ``}
         <button class="btn btn-primary" onclick="reSave()">${icon("check", 14)} ${t("re_save")}</button>
@@ -4565,4 +4567,158 @@ function reExportPDF() {
       });
     }, 100);
   }, 50);
+}
+
+// ─── Import Centris ────────────────────────────────────────────────
+// L'utilisateur colle le HTML brut d'une fiche Centris (Ctrl+U sur la
+// page Centris puis Ctrl+A/Ctrl+C). On parse, on affiche un aperçu
+// des champs détectés, et on remplit reCurrent / houseCurrent.
+
+// Démarre une nouvelle analyse locative ET ouvre le modal d'import
+function reNewFromCentris() {
+  reCurrent = reNewAnalysis();
+  reMode = "edit";
+  renderPage();
+  setTimeout(() => openCentrisImportModal("rental"), 60);
+}
+
+// Démarre une nouvelle fiche maison ET ouvre le modal d'import
+function houseNewFromCentris() {
+  if (typeof houseNew === "function") {
+    houseNew();
+    setTimeout(() => openCentrisImportModal("house"), 60);
+  }
+}
+
+// Ouvre le modal d'import
+// target : "rental" (immeuble locatif) | "house" (résidence)
+function openCentrisImportModal(target) {
+  const targetLabel = target === "house" ? t("nav_house") : t("re_title");
+  const html = `
+    <div class="modal" style="max-width:680px">
+      <div class="modal-header">
+        <h3>${icon("download", 18)} ${t("centris_import_title")}</h3>
+        <button class="close-btn" onclick="closeModal()" aria-label="${t("close")}">${icon("x", 18)}</button>
+      </div>
+      <div style="padding:0 4px">
+        <p style="color:var(--text2);font-size:14px;line-height:1.55;margin:0 0 12px">
+          ${t("centris_import_step_intro").replace("{target}", targetLabel)}
+        </p>
+        <details class="centris-help" style="margin:0 0 14px;background:var(--surface-soft, #f6f3ed);padding:10px 14px;border-radius:8px">
+          <summary style="cursor:pointer;font-weight:600;font-size:13px;color:var(--text)">${t("centris_import_help_summary")}</summary>
+          <ol style="margin:10px 0 0;padding-left:22px;font-size:13px;color:var(--text2);line-height:1.7">
+            <li>${t("centris_import_step1")}</li>
+            <li>${t("centris_import_step2")}</li>
+            <li>${t("centris_import_step3")}</li>
+            <li>${t("centris_import_step4")}</li>
+          </ol>
+        </details>
+        <label style="display:block;font-weight:600;font-size:13px;color:var(--text);margin-bottom:6px">
+          ${t("centris_import_label_html")}
+        </label>
+        <textarea id="centris-html-input" rows="6" placeholder="${t("centris_import_placeholder")}" style="width:100%;font-family:monospace;font-size:12px;padding:10px;border:1px solid var(--border, #ddd);border-radius:8px;resize:vertical;background:var(--bg-soft, #fff);color:var(--text)"></textarea>
+        <input type="hidden" id="centris-target" value="${esc(target)}">
+        <div id="centris-preview" style="margin-top:14px"></div>
+      </div>
+      <div class="modal-actions" style="margin-top:16px">
+        <button class="btn-cancel" onclick="closeModal()">${t("cancel")}</button>
+        <button class="btn btn-secondary" onclick="centrisAnalyze()">${icon("search", 14)} ${t("centris_import_analyze")}</button>
+        <button class="btn btn-primary" id="centris-apply-btn" disabled onclick="centrisApply()">${icon("check", 14)} ${t("centris_import_apply")}</button>
+      </div>
+    </div>`;
+  showModal(html);
+  // Stocke le résultat du parsing dans une variable globale du scope du modal
+  window._centrisParsedResult = null;
+  setTimeout(() => {
+    const ta = document.getElementById("centris-html-input");
+    if (ta) ta.focus();
+  }, 100);
+}
+
+// Analyse le HTML collé et affiche un aperçu des champs détectés
+function centrisAnalyze() {
+  const ta = document.getElementById("centris-html-input");
+  const previewEl = document.getElementById("centris-preview");
+  const applyBtn = document.getElementById("centris-apply-btn");
+  if (!ta || !previewEl) return;
+  const html = ta.value || "";
+  if (html.trim().length < 50) {
+    previewEl.innerHTML = `<div class="centris-warn">${t("centris_import_need_html")}</div>`;
+    if (applyBtn) applyBtn.disabled = true;
+    return;
+  }
+  if (typeof parseCentrisHTML !== "function") {
+    previewEl.innerHTML = `<div class="centris-warn">${t("centris_import_parser_missing")}</div>`;
+    return;
+  }
+  const parsed = parseCentrisHTML(html);
+  window._centrisParsedResult = parsed;
+  // Confiance : 0-30 rouge, 30-60 orange, 60+ vert
+  const conf = parsed._confidence;
+  const confColor = conf >= 60 ? "var(--status-green)" : conf >= 30 ? "var(--status-orange, #f59e0b)" : "var(--status-red)";
+  const fmtV = (v, isMoney) => v == null ? `<span style="color:var(--text3)">${t("centris_import_not_found")}</span>` : (isMoney ? fmtMoney(v) : esc(String(v)));
+  // Note sur le type détecté vs cible
+  const target = document.getElementById("centris-target")?.value || "rental";
+  let typeMismatch = "";
+  if (parsed.propertyType && parsed.propertyType !== target) {
+    const detectedLabel = parsed.propertyType === "rental" ? t("centris_type_rental") : t("centris_type_house");
+    const targetLabel = target === "rental" ? t("centris_type_rental") : t("centris_type_house");
+    typeMismatch = `<div class="centris-warn" style="margin-bottom:10px">${t("centris_import_type_mismatch").replace("{detected}", detectedLabel).replace("{target}", targetLabel)}</div>`;
+  }
+  let unitsHtml = "";
+  if (parsed.units && parsed.units.length > 0) {
+    unitsHtml = `<div class="centris-row"><span class="centris-row__label">${t("centris_field_units")}</span><span class="centris-row__value">${parsed.units.map(u => `${esc(u.label)} → ${fmtMoney(u.rent)}/mois`).join("<br>")}</span></div>`;
+  }
+  previewEl.innerHTML = `
+    <div class="centris-preview-box">
+      <div class="centris-preview-head">
+        <div style="font-weight:600;font-size:13px">${t("centris_import_detected")}</div>
+        <div style="font-size:12px;color:${confColor};font-weight:600">${t("centris_import_confidence")}: ${conf}%</div>
+      </div>
+      ${typeMismatch}
+      <div class="centris-rows">
+        <div class="centris-row"><span class="centris-row__label">${t("centris_field_price")}</span><span class="centris-row__value">${fmtV(parsed.price, true)}</span></div>
+        <div class="centris-row"><span class="centris-row__label">${t("centris_field_address")}</span><span class="centris-row__value">${fmtV(parsed.address)}</span></div>
+        <div class="centris-row"><span class="centris-row__label">${t("centris_field_type")}</span><span class="centris-row__value">${fmtV(parsed.rawTypeText)}</span></div>
+        <div class="centris-row"><span class="centris-row__label">${t("centris_field_year")}</span><span class="centris-row__value">${fmtV(parsed.year)}</span></div>
+        <div class="centris-row"><span class="centris-row__label">${t("centris_field_mun_tax")}</span><span class="centris-row__value">${fmtV(parsed.municipalTax, true)}</span></div>
+        <div class="centris-row"><span class="centris-row__label">${t("centris_field_school_tax")}</span><span class="centris-row__value">${fmtV(parsed.schoolTax, true)}</span></div>
+        <div class="centris-row"><span class="centris-row__label">${t("centris_field_eval")}</span><span class="centris-row__value">${fmtV(parsed.municipalAssessment, true)}</span></div>
+        ${parsed.livingAreaSqft ? `<div class="centris-row"><span class="centris-row__label">${t("centris_field_living_area")}</span><span class="centris-row__value">${parsed.livingAreaSqft} pi²</span></div>` : ""}
+        ${parsed.landAreaSqft ? `<div class="centris-row"><span class="centris-row__label">${t("centris_field_land_area")}</span><span class="centris-row__value">${parsed.landAreaSqft} pi²</span></div>` : ""}
+        ${parsed.bedrooms != null ? `<div class="centris-row"><span class="centris-row__label">${t("centris_field_bedrooms")}</span><span class="centris-row__value">${parsed.bedrooms}</span></div>` : ""}
+        ${parsed.bathrooms != null ? `<div class="centris-row"><span class="centris-row__label">${t("centris_field_bathrooms")}</span><span class="centris-row__value">${parsed.bathrooms}</span></div>` : ""}
+        ${parsed.grossRevenue != null ? `<div class="centris-row"><span class="centris-row__label">${t("centris_field_gross_rev")}</span><span class="centris-row__value">${fmtMoney(parsed.grossRevenue)}/an</span></div>` : ""}
+        ${unitsHtml}
+        ${parsed.centrisId ? `<div class="centris-row"><span class="centris-row__label">Nº MLS</span><span class="centris-row__value">${esc(parsed.centrisId)}</span></div>` : ""}
+      </div>
+    </div>
+  `;
+  if (applyBtn) applyBtn.disabled = conf === 0;
+}
+
+// Applique le résultat parsé sur le draft courant et ferme le modal
+function centrisApply() {
+  const parsed = window._centrisParsedResult;
+  if (!parsed) return;
+  const target = document.getElementById("centris-target")?.value || "rental";
+  if (target === "rental") {
+    if (!reCurrent) reCurrent = reNewAnalysis();
+    if (typeof applyCentrisToRentalAnalysis === "function") {
+      applyCentrisToRentalAnalysis(parsed, reCurrent);
+    }
+    reMode = "edit";
+  } else if (target === "house") {
+    if (typeof houseCurrent === "undefined" || !houseCurrent) {
+      if (typeof houseNew === "function") houseNew();
+    }
+    if (typeof applyCentrisToHouseAnalysis === "function" && typeof houseCurrent !== "undefined") {
+      applyCentrisToHouseAnalysis(parsed, houseCurrent);
+    }
+  }
+  window._centrisParsedResult = null;
+  closeModal();
+  renderPage();
+  // Petit toast de confirmation
+  reShowSaveToast();
 }

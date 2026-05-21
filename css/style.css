@@ -5389,3 +5389,71 @@ h1, h2, h3, h4 {
 
 /* Mode impression actif (déclenché par JS pour pré-ouvrir les details) */
 body.re-printing details { open: true; }
+
+/* ─── Modal d'import Centris ────────────────────────────────────────── */
+.centris-help summary::-webkit-details-marker { display: none; }
+.centris-help summary::before {
+  content: "▸";
+  display: inline-block;
+  margin-right: 6px;
+  transition: transform .15s ease;
+}
+.centris-help[open] summary::before { transform: rotate(90deg); }
+
+.centris-warn {
+  background: rgba(245, 158, 11, 0.12);
+  border-left: 3px solid var(--status-orange, #f59e0b);
+  color: var(--text);
+  font-size: 13px;
+  padding: 8px 12px;
+  border-radius: 6px;
+  line-height: 1.5;
+}
+
+.centris-preview-box {
+  background: var(--surface-soft, #f9f6f0);
+  border: 1px solid var(--border, #e5e0d6);
+  border-radius: 10px;
+  padding: 14px 16px;
+}
+body.dark .centris-preview-box {
+  background: rgba(255, 255, 255, 0.03);
+  border-color: rgba(255, 255, 255, 0.08);
+}
+
+.centris-preview-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 10px;
+  padding-bottom: 8px;
+  border-bottom: 1px solid var(--border, #e5e0d6);
+}
+
+.centris-rows {
+  display: grid;
+  gap: 6px;
+}
+
+.centris-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 12px;
+  font-size: 13px;
+  padding: 4px 0;
+  border-bottom: 1px dotted var(--border, rgba(0,0,0,.06));
+}
+.centris-row:last-child { border-bottom: none; }
+
+.centris-row__label {
+  color: var(--text2);
+  flex-shrink: 0;
+  min-width: 130px;
+}
+.centris-row__value {
+  color: var(--text);
+  font-weight: 500;
+  text-align: right;
+  word-break: break-word;
+}

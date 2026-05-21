@@ -46,3 +46,10 @@ db.collection("realEstateAnalyses").onSnapshot(snap => {
     .sort((a, b) => (b.updatedAt || 0) - (a.updatedAt || 0));
   if (isLoggedIn && activePage === "realestate" && reMode === "list") renderPage();
 });
+
+db.collection("houseAnalyses").onSnapshot(snap => {
+  houseAnalyses = snap.docs.map(d => ({ id: d.id, ...d.data() }))
+    .filter(belongsToCurrentUser)
+    .sort((a, b) => (b.updatedAt || 0) - (a.updatedAt || 0));
+  if (isLoggedIn && activePage === "house" && houseMode === "list") renderPage();
+});
