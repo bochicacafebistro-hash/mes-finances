@@ -4604,6 +4604,27 @@ function openCentrisImportModal(target) {
         <p style="color:var(--text2);font-size:14px;line-height:1.55;margin:0 0 12px">
           ${t("centris_import_step_intro").replace("{target}", targetLabel)}
         </p>
+
+        <!-- Champ URL : méthode principale -->
+        <label style="display:block;font-weight:600;font-size:13px;color:var(--text);margin-bottom:6px">
+          ${t("centris_import_label_url")}
+        </label>
+        <div style="display:flex;gap:8px;align-items:stretch;margin-bottom:6px">
+          <input id="centris-url-input" type="url" placeholder="${t("centris_import_url_placeholder")}" style="flex:1;font-size:13px;padding:9px 12px;border:1px solid var(--border, #ddd);border-radius:8px;background:var(--bg-soft, #fff);color:var(--text)">
+          <button class="btn btn-primary" id="centris-fetch-btn" onclick="centrisFetchFromUrl()" style="white-space:nowrap">
+            ${icon("download", 14)} ${t("centris_import_load_url")}
+          </button>
+        </div>
+        <div id="centris-fetch-status" style="font-size:12px;color:var(--text3);margin-bottom:14px;min-height:16px"></div>
+
+        <!-- Séparateur OR -->
+        <div style="display:flex;align-items:center;gap:10px;margin:18px 0 12px;color:var(--text3);font-size:12px;text-transform:uppercase;letter-spacing:0.06em">
+          <div style="flex:1;height:1px;background:var(--border, #e5e0d6)"></div>
+          <div>${t("centris_import_or_manual")}</div>
+          <div style="flex:1;height:1px;background:var(--border, #e5e0d6)"></div>
+        </div>
+
+        <!-- Fallback : coller le HTML -->
         <details class="centris-help" style="margin:0 0 14px;background:var(--surface-soft, #f6f3ed);padding:10px 14px;border-radius:8px">
           <summary style="cursor:pointer;font-weight:600;font-size:13px;color:var(--text)">${t("centris_import_help_summary")}</summary>
           <ol style="margin:10px 0 0;padding-left:22px;font-size:13px;color:var(--text2);line-height:1.7">
@@ -4630,9 +4651,59 @@ function openCentrisImportModal(target) {
   // Stocke le résultat du parsing dans une variable globale du scope du modal
   window._centrisParsedResult = null;
   setTimeout(() => {
-    const ta = document.getElementById("centris-html-input");
-    if (ta) ta.focus();
+    const inp = document.getElementById("centris-url-input");
+    if (inp) inp.focus();
   }, 100);
+}
+
+// Fetch l'URL Centris via le proxy serverless /api/centris, met le
+// résultat dans le textarea HTML et lance l'analyse automatiquement.
+async function centrisFetchFromUrl() {
+  const inp = document.getElementById("centris-url-input");
+  const btn = document.getElementById("centris-fetch-btn");
+  const status = document.getElementById("centris-fetch-status");
+  const ta = document.getElementById("centris-html-input");
+  if (!inp || !btn || !status || !ta) return;
+  const url = (inp.value || "").trim();
+  if (!url) {
+    status.style.color = "var(--status-red)";
+    status.textContent = t("centris_import_url_required");
+    return;
+  }
+  // Validation côté client : doit être une URL Centris
+  if (!/^https?:\/\/([\w-]+\.)*centris\.ca\//i.test(url)) {
+    status.style.color = "var(--status-red)";
+    status.textContent = t("centris_import_url_invalid");
+    return;
+  }
+  btn.disabled = true;
+  status.style.color = "var(--text3)";
+  status.textContent = t("centris_import_url_loading");
+  try {
+    const resp = await fetch("/api/centris?url=" + encodeURIComponent(url));
+    if (!resp.ok) {
+      let errMsg = t("centris_import_url_failed");
+      try {
+        const body = await resp.json();
+        if (body && body.message) errMsg = body.message;
+      } catch (e) { /* ignore */ }
+      status.style.color = "var(--status-red)";
+      status.innerHTML = `${esc(errMsg)} <br><span style="color:var(--text3)">${t("centris_import_url_fallback")}</span>`;
+      btn.disabled = false;
+      return;
+    }
+    const html = await resp.text();
+    ta.value = html;
+    status.style.color = "var(--status-green)";
+    status.textContent = t("centris_import_url_loaded").replace("{kb}", Math.round(html.length / 1024));
+    btn.disabled = false;
+    // Auto-analyse
+    centrisAnalyze();
+  } catch (err) {
+    status.style.color = "var(--status-red)";
+    status.innerHTML = `${esc(t("centris_import_url_failed"))} (${esc(err.message || "")}) <br><span style="color:var(--text3)">${t("centris_import_url_fallback")}</span>`;
+    btn.disabled = false;
+  }
 }
 
 // Analyse le HTML collé et affiche un aperçu des champs détectés

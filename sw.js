@@ -2,7 +2,7 @@
  * Mes Finances — Service Worker (PWA)
  */
 
-const CACHE_VERSION = 'v3.0.0';
+const CACHE_VERSION = 'v3.1.0';
 const CACHE_NAME = `mes-finances-${CACHE_VERSION}`;
 
 const APP_SHELL = [
@@ -15,6 +15,8 @@ const APP_SHELL = [
   '/js/i18n.js',
   '/js/utils.js',
   '/js/pages.js',
+  '/js/centris-parser.js',
+  '/js/house-page.js',
   '/js/sidebar.js',
   '/js/auth.js',
   '/js/firebase-listeners.js',
@@ -24,6 +26,9 @@ const APP_SHELL = [
 ];
 
 const NEVER_CACHE = ['firestore.googleapis.com', 'firebase', 'googleapis.com', 'gstatic.com'];
+
+// Chemins jamais cachés (toujours réseau) — fonctions serverless dynamiques
+const NEVER_CACHE_PATHS = ['/api/'];
 
 self.addEventListener('install', (event) => {
   event.waitUntil(
@@ -45,6 +50,7 @@ self.addEventListener('fetch', (event) => {
   const url = new URL(event.request.url);
   if (event.request.method !== 'GET') return;
   if (NEVER_CACHE.some((d) => url.hostname.includes(d))) return;
+  if (NEVER_CACHE_PATHS.some((p) => url.pathname.startsWith(p))) return;
 
   event.respondWith(
     caches.match(event.request).then((cached) => {
