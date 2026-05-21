@@ -83,14 +83,20 @@
       const matches = patterns.some(p => p instanceof RegExp ? p.test(text) : text.toLowerCase().includes(String(p).toLowerCase()));
       if (!matches) continue;
       // Cas 2 : valeur inline dans le même élément ("Label: Valeur" ou "Label → Valeur")
-      // On trouve la portion APRÈS le label en utilisant le pattern
+      // On exige un $ explicite dans la valeur pour éviter de capturer une
+      // année entre parenthèses (ex: "Municipales (2026)" ne doit PAS donner "(2026)").
+      // Pour les valeurs sans $ (année, nombre de pièces, etc.), on tombe sur le Cas 1/3.
       for (const p of patterns) {
         const re = p instanceof RegExp ? p : new RegExp(String(p), "i");
         const match = text.match(re);
         if (match && match.index !== undefined) {
-          const after = text.slice(match.index + match[0].length).replace(/^[\s:：—→\-]+/, "").trim();
-          // Si on a quelque chose qui ressemble à une valeur (chiffres ou texte court), on retourne
-          if (after && after.length > 0 && after.length < 100 && /[\d$]/.test(after)) {
+          // Saute aussi une éventuelle parenthèse d'année juste après le label
+          // ("Municipales (2026) — 4 469 $" → on garde "4 469 $")
+          let after = text.slice(match.index + match[0].length);
+          after = after.replace(/^\s*\(\s*(?:19|20)\d{2}[^)]*\)\s*/, "");
+          after = after.replace(/^[\s:：—→\-]+/, "").trim();
+          // Exige un montant en $ pour considérer cette extraction inline valide
+          if (after && after.length > 0 && after.length < 100 && /\$/.test(after)) {
             return after;
           }
         }
@@ -162,6 +168,125 @@
     return units;
   }
 
+  // ── Parseur "Détails financiers" (format Centris actuel) ─────────
+  // Cherche le bloc .financial-details-tables (ou un fallback contenant
+  // à la fois "Évaluation municipale" et "Taxes") et parse en contexte
+  // les deux sous-sections séparément.
+  function parseFinancialDetailsBlock(doc, result) {
+    // 1. Trouve le bloc des détails financiers
+    let block = doc.querySelector('[class*="financial-details" i]');
+    if (!block) {
+      // Fallback : un container raisonnablement petit contenant les deux mots
+      const containers = doc.querySelectorAll("section, div, table");
+      for (const c of containers) {
+        const text = (c.textContent || "");
+        if (text.length > 4000 || text.length < 60) continue;
+        if (/évaluation\s+municipale/i.test(text) && /\btaxes?\b/i.test(text)) {
+          block = c;
+          break;
+        }
+      }
+    }
+    if (!block) return;
+
+    // 2. Pour chaque sous-titre dans le bloc, isole la sous-section
+    // (l'élément suivant ou la table à proximité) et parse ses labels.
+    const subTitles = block.querySelectorAll("h1, h2, h3, h4, h5, strong, caption, [class*='title' i], [class*='header' i], [class*='label' i]");
+    const seenSections = new Set();
+
+    function extractSubSectionElement(titleEl) {
+      // a) Frère suivant qui contient des cellules (table) ou des div de valeurs
+      let next = titleEl.nextElementSibling;
+      while (next) {
+        if (next.querySelector && (next.querySelector("td, dd, [class*='value' i]") || next.textContent.includes("$"))) {
+          return next;
+        }
+        next = next.nextElementSibling;
+      }
+      // b) Le parent immédiat si pas trop gros (ex: <div class="block"><h3>TAXES</h3><table>...</table></div>)
+      const parent = titleEl.parentElement;
+      if (parent && parent !== block && (parent.textContent || "").length < 1500) return parent;
+      return null;
+    }
+
+    for (const titleEl of subTitles) {
+      const titleText = (titleEl.textContent || "").trim();
+      if (!titleText || titleText.length > 80) continue;
+      const lower = titleText.toLowerCase();
+
+      // — Bloc ÉVALUATION MUNICIPALE —
+      if (!seenSections.has("eval") && /^évaluation\s+municipale/i.test(lower)) {
+        const sub = extractSubSectionElement(titleEl);
+        if (!sub) continue;
+        const land = findValueByLabel(sub, [/^terrain\b/i, /terrain/i]);
+        if (land) {
+          const v = parseMoney(land);
+          if (v != null && v > 100 && v < 100000000) {
+            result.municipalAssessmentLand = v;
+            result._foundFields.push("evalLand");
+          }
+        }
+        const building = findValueByLabel(sub, [/^b[âa]timent\b/i, /b[âa]timent/i]);
+        if (building) {
+          const v = parseMoney(building);
+          if (v != null && v > 1000) {
+            result.municipalAssessmentBuilding = v;
+            result._foundFields.push("evalBuilding");
+          }
+        }
+        const total = findValueByLabel(sub, [/^total\b/i]);
+        if (total) {
+          const v = parseMoney(total);
+          if (v != null && v > 1000) {
+            result.municipalAssessment = v;
+            result._foundFields.push("evalTotal");
+          }
+        }
+        seenSections.add("eval");
+      }
+
+      // — Bloc TAXES —
+      else if (!seenSections.has("taxes") && /^taxes?\s*$/i.test(lower)) {
+        const sub = extractSubSectionElement(titleEl);
+        if (!sub) continue;
+        // "Municipales (2026)" ou "Municipales"
+        const mun = findValueByLabel(sub, [/^municipales?\b/i, /\bmunicipales?\b/i]);
+        if (mun) {
+          const v = parseMoney(mun);
+          if (v != null && v < 100000) {
+            result.municipalTax = v;
+            result._foundFields.push("municipalTax");
+          }
+        }
+        const school = findValueByLabel(sub, [/^scolaires?\b/i, /\bscolaires?\b/i]);
+        if (school) {
+          const v = parseMoney(school);
+          if (v != null && v < 50000) {
+            result.schoolTax = v;
+            result._foundFields.push("schoolTax");
+          }
+        }
+        seenSections.add("taxes");
+      }
+    }
+  }
+
+  // ── Mapping du type Centris → unitType de l'app ──────────────────
+  // "Triplex à vendre" → "triplex" ; "Maison à étages" → "single", etc.
+  function unitTypeFromTypeText(rawText) {
+    if (!rawText) return null;
+    const s = rawText.toLowerCase();
+    if (/\bsextuplex\b|\b6\s*(?:plex|logements?)\b/.test(s)) return "6plex";
+    if (/\bquintuplex\b|\b5\s*(?:plex|logements?)\b/.test(s)) return "5plex";
+    if (/\bquadruplex\b|\b4\s*(?:plex|logements?)\b/.test(s)) return "quadruplex";
+    if (/\btriplex\b|\b3\s*(?:plex|logements?)\b/.test(s)) return "triplex";
+    if (/\bduplex\b|\b2\s*(?:plex|logements?)\b/.test(s)) return "duplex";
+    if (/\bmaison|cottage|bungalow|plain[- ]?pied|à\s+étages|jumel|condo|copropri|appartement|unifamiliale\b/.test(s)) return "single";
+    // Immeuble à logements multiples / multiplex / septuplex+ → laisser libre
+    if (/\bmultiplex|septuplex|octuplex|multi[- ]?(plex|logements?)|immeuble/.test(s)) return "custom";
+    return null;
+  }
+
   // ── Parseur principal ─────────────────────────────────────────────
   // Prend le HTML brut d'une fiche Centris et retourne :
   //   { propertyType, price, address, year, livingAreaSqft, landAreaSqft,
@@ -174,6 +299,8 @@
       rawTypeText: null,
       price: null,
       address: null,
+      addressFull: null,        // adresse complète (.pt-1 sur Centris)
+      description: null,         // description longue (.col-lg-12.description)
       year: null,
       livingAreaSqft: null,
       landAreaSqft: null,
@@ -186,7 +313,8 @@
       municipalAssessmentBuilding: null,
       municipalAssessmentLand: null,
       grossRevenue: null,
-      units: [],
+      units: [],                 // chaque unit : { label, subtype, rent }
+      unitSubtypes: [],          // types d'appartements (4½, 5½...) tels qu'extraits
       centrisId: null,
       centrisUrl: null,
       _foundFields: [],
@@ -314,34 +442,27 @@
       }
     }
 
-    // ── 7. Taxes municipales / scolaires ───────────────────────────
-    const munTax = findValueByLabel(doc, [/taxes?\s+municipales?/i]);
-    if (munTax) {
-      const v = parseMoney(munTax);
-      if (v != null && v < 100000) { result.municipalTax = v; result._foundFields.push("municipalTax"); }
+    // ── 7-8. Détails financiers : ÉVALUATION MUNICIPALE + TAXES ────
+    // Centris regroupe les deux sous-tableaux dans un bloc
+    // class="row financial-details-tables" (avec sous-titres "ÉVALUATION
+    // MUNICIPALE (2026)" et "TAXES"). On parse en contexte pour ne pas
+    // confondre les deux "Total" et reconnaître "Municipales (2026)"
+    // sans le mot "Taxes" devant.
+    parseFinancialDetailsBlock(doc, result);
+    // Fallback ancien format pour les fiches Centris plus anciennes
+    if (result.municipalTax == null) {
+      const munTax = findValueByLabel(doc, [/taxes?\s+municipales?/i]);
+      if (munTax) {
+        const v = parseMoney(munTax);
+        if (v != null && v < 100000) { result.municipalTax = v; result._foundFields.push("municipalTax (fallback)"); }
+      }
     }
-    const schoolTax = findValueByLabel(doc, [/taxes?\s+scolaires?/i]);
-    if (schoolTax) {
-      const v = parseMoney(schoolTax);
-      if (v != null && v < 50000) { result.schoolTax = v; result._foundFields.push("schoolTax"); }
-    }
-
-    // ── 8. Évaluation municipale ───────────────────────────────────
-    // Centris affiche un mini-tableau Évaluation : Terrain / Bâtiment / Total
-    const evalBuilding = findValueInSection(doc, "évaluation", [/bâtiment/i, /batiment/i]);
-    if (evalBuilding) {
-      const v = parseMoney(evalBuilding);
-      if (v != null && v > 1000) { result.municipalAssessmentBuilding = v; result._foundFields.push("evalBuilding"); }
-    }
-    const evalLand = findValueInSection(doc, "évaluation", [/terrain/i]);
-    if (evalLand) {
-      const v = parseMoney(evalLand);
-      if (v != null && v > 100) { result.municipalAssessmentLand = v; result._foundFields.push("evalLand"); }
-    }
-    const evalTotal = findValueInSection(doc, "évaluation", [/total/i]);
-    if (evalTotal) {
-      const v = parseMoney(evalTotal);
-      if (v != null && v > 1000) { result.municipalAssessment = v; result._foundFields.push("evalTotal"); }
+    if (result.schoolTax == null) {
+      const schoolTax = findValueByLabel(doc, [/taxes?\s+scolaires?/i]);
+      if (schoolTax) {
+        const v = parseMoney(schoolTax);
+        if (v != null && v < 50000) { result.schoolTax = v; result._foundFields.push("schoolTax (fallback)"); }
+      }
     }
     // Si on a bâtiment+terrain mais pas total, on additionne
     if (result.municipalAssessment == null && result.municipalAssessmentBuilding != null && result.municipalAssessmentLand != null) {
@@ -391,6 +512,49 @@
       if (v != null && v > 1000) { result.grossRevenue = v; result._foundFields.push("grossRevenue"); }
     }
 
+    // ── 12.b Description longue (.col-lg-12.description) ───────────
+    // Centris met l'argumentaire de vente dans ce bloc — on l'importe
+    // dans les notes pour que l'utilisateur ait le contexte complet.
+    const descEl = doc.querySelector(".col-lg-12.description, [class*='col-lg-12'][class*='description']");
+    if (descEl) {
+      const raw = (descEl.textContent || "").replace(/\s+/g, " ").trim();
+      if (raw && raw.length > 20) {
+        result.description = raw.length > 4000 ? raw.slice(0, 4000) + "…" : raw;
+        result._foundFields.push("description");
+      }
+    }
+
+    // ── 12.c Adresse complète (.pt-1) ──────────────────────────────
+    // Sur Centris, l'adresse complète est dans un .pt-1 (très générique
+    // dans Bootstrap, donc on prend le premier qui ressemble à une adresse).
+    const ptEls = doc.querySelectorAll(".pt-1");
+    for (const el of ptEls) {
+      const txt = (el.textContent || "").trim().replace(/\s+/g, " ");
+      // Heuristique : adresse = commence par un chiffre, contient un nom de voie
+      if (txt && txt.length > 10 && txt.length < 200 &&
+          /^\d+[a-z]?\s/i.test(txt) &&
+          /(rue|avenue|boulevard|chemin|route|place|côte|cote|allée|allee|impasse|montée|montee|terrasse|croissant|rang|av\.|boul\.|ch\.)/i.test(txt)) {
+        result.addressFull = txt;
+        // Si on n'avait pas trouvé d'adresse avant, ou si celle-ci est plus complète,
+        // on l'utilise
+        if (!result.address || txt.length > result.address.length) {
+          result.address = txt;
+        }
+        result._foundFields.push("addressFull (.pt-1)");
+        break;
+      }
+    }
+
+    // ── 12.d Sous-types de logements (data-id="NbUniteFormatted") ──
+    // Chaque logement a son type "4½", "5½" dans cet attribut sur Centris.
+    const subtypeEls = doc.querySelectorAll('[data-id="NbUniteFormatted"]');
+    if (subtypeEls.length) {
+      result.unitSubtypes = Array.from(subtypeEls)
+        .map(el => (el.textContent || "").trim().replace(/\s+/g, " "))
+        .filter(s => s && s.length > 0 && s.length < 40);
+      if (result.unitSubtypes.length) result._foundFields.push("unitSubtypes (" + result.unitSubtypes.length + ")");
+    }
+
     // ── 13. Détail des logements (loyers individuels) ──────────────
     // Cherche d'abord une section "Logements" / "Unités" et y extrait les loyers.
     const allSections = doc.querySelectorAll("section, div, table");
@@ -432,6 +596,31 @@
     return result;
   }
 
+  // ── Helpers d'application partagés ───────────────────────────────
+  // Nettoie le texte du type ("Triplex à vendre" → "Triplex")
+  function cleanTypeText(rawTypeText) {
+    if (!rawTypeText) return "";
+    return rawTypeText
+      .replace(/\s*[—\-]?\s*à\s*vendre\s*$/i, "")
+      .replace(/\s*-\s*Centris.*$/i, "")
+      .trim();
+  }
+  // Construit un nom auto : "Type + adresse civique" (sans la ville/code postal)
+  function buildAnalysisName(parsed) {
+    const type = cleanTypeText(parsed.rawTypeText);
+    // Adresse courte : juste le numéro civique + voie (sans ville/province/code postal)
+    let shortAddr = "";
+    const full = parsed.addressFull || parsed.address || "";
+    if (full) {
+      // Coupe à la première virgule pour enlever "Montréal, QC, H1H 1H1"
+      shortAddr = full.split(",")[0].trim();
+    }
+    if (type && shortAddr) return type + " " + shortAddr;
+    if (type) return type;
+    if (shortAddr) return shortAddr;
+    return "";
+  }
+
   // ── Application des données parsées sur reCurrent (locatif) ──────
   function applyCentrisToRentalAnalysis(parsed, draft) {
     if (!parsed || !draft) return;
@@ -439,47 +628,75 @@
     if (parsed.address) draft.address = parsed.address;
     if (parsed.municipalTax != null) draft.municipalTax = parsed.municipalTax;
     if (parsed.schoolTax != null) draft.schoolTax = parsed.schoolTax;
-    // Construit un nom par défaut s'il n'y en a pas
-    if (!draft.name && parsed.rawTypeText) {
-      draft.name = parsed.rawTypeText.replace(/\s*à\s*vendre.*$/i, "").trim();
+    // Nom auto : "Type + adresse" (écrase l'ancien nom seulement si vide ou identique à l'ancien auto)
+    const autoName = buildAnalysisName(parsed);
+    if (autoName && (!draft.name || draft.name.trim() === "" || draft.name === draft._lastAutoName)) {
+      draft.name = autoName;
+      draft._lastAutoName = autoName; // mémorise pour pouvoir l'écraser au prochain import
     }
-    if (!draft.name && parsed.address) {
-      draft.name = parsed.address.split(",")[0].trim();
-    }
-    // Notes : on enrichit avec ce qu'on a trouvé d'autre
+    // Notes : description Centris + métadonnées
     const notesParts = [];
-    if (parsed.centrisUrl) notesParts.push("Centris: " + parsed.centrisUrl);
-    if (parsed.centrisId) notesParts.push("Nº MLS: " + parsed.centrisId);
-    if (parsed.year) notesParts.push("Année: " + parsed.year);
-    if (parsed.livingAreaSqft) notesParts.push("Sup. habitable: " + parsed.livingAreaSqft + " pi²");
-    if (parsed.landAreaSqft) notesParts.push("Terrain: " + parsed.landAreaSqft + " pi²");
-    if (parsed.municipalAssessment != null) notesParts.push("Éval. municipale: " + parsed.municipalAssessment.toLocaleString("fr-CA") + " $");
-    if (parsed.grossRevenue != null) notesParts.push("Revenus bruts (Centris): " + parsed.grossRevenue.toLocaleString("fr-CA") + " $/an");
+    if (parsed.description) {
+      notesParts.push("📝 Description Centris :");
+      notesParts.push(parsed.description);
+      notesParts.push(""); // ligne vide de séparation
+    }
+    const metaParts = [];
+    if (parsed.centrisUrl) metaParts.push("Centris: " + parsed.centrisUrl);
+    if (parsed.centrisId) metaParts.push("Nº MLS: " + parsed.centrisId);
+    if (parsed.year) metaParts.push("Année: " + parsed.year);
+    if (parsed.livingAreaSqft) metaParts.push("Sup. habitable: " + parsed.livingAreaSqft + " pi²");
+    if (parsed.landAreaSqft) metaParts.push("Terrain: " + parsed.landAreaSqft + " pi²");
+    if (parsed.municipalAssessment != null) metaParts.push("Éval. municipale: " + parsed.municipalAssessment.toLocaleString("fr-CA") + " $");
+    if (parsed.grossRevenue != null) metaParts.push("Revenus bruts (Centris): " + parsed.grossRevenue.toLocaleString("fr-CA") + " $/an");
+    if (metaParts.length) {
+      if (notesParts.length) notesParts.push("📊 Données extraites :");
+      notesParts.push(metaParts.join("\n"));
+    }
     if (notesParts.length) {
       const existing = (draft.notes || "").trim();
       const block = notesParts.join("\n");
-      draft.notes = existing ? existing + "\n\n— Importé de Centris —\n" + block : block;
+      draft.notes = existing && !existing.includes("Description Centris")
+        ? existing + "\n\n— Importé de Centris —\n" + block
+        : "— Importé de Centris —\n" + block;
     }
-    // Loyers individuels : si on en a, et que le nombre correspond ± à unitType
+    // ── Type d'immeuble (unitType) ───────────────────────────────
+    // Priorité : nombre de logements détectés > nb de sous-types > texte du type Centris
+    const unitTypeFromText = parsed.rawTypeText ? unitTypeFromTypeText(parsed.rawTypeText) : null;
+    const typeByCount = { 1: "single", 2: "duplex", 3: "triplex", 4: "quadruplex", 5: "5plex", 6: "6plex" };
+    let inferredType = null;
+    const subtypeCount = (parsed.unitSubtypes || []).length;
     if (parsed.units && parsed.units.length > 0) {
-      // Ajuste le type d'unité au nombre détecté
-      const n = parsed.units.length;
-      const typeByCount = { 2: "duplex", 3: "triplex", 4: "quadruplex", 5: "5plex", 6: "6plex" };
-      if (typeByCount[n]) draft.unitType = typeByCount[n];
-      // Remplit les loyers
+      inferredType = typeByCount[parsed.units.length] || "custom";
+    } else if (subtypeCount >= 1) {
+      inferredType = typeByCount[subtypeCount] || "custom";
+    } else if (unitTypeFromText) {
+      inferredType = unitTypeFromText;
+    }
+    if (inferredType) draft.unitType = inferredType;
+
+    // ── Loyers individuels ──────────────────────────────────────
+    // Chaque unit a maintenant un champ `subtype` (ex: "4½", "5½") qui
+    // sera affiché en sous-libellé sous "Logement N" dans le formulaire.
+    const subtypes = parsed.unitSubtypes || [];
+    if (parsed.units && parsed.units.length > 0) {
       draft.units = parsed.units.map((u, i) => ({
         name: "Logement " + (i + 1),
+        subtype: (u.subtype || subtypes[i] || u.label || "").trim(),
         rent: Math.round(u.rent),
         utilitiesIncluded: true,
         ownerOccupied: false
       }));
-    } else if (parsed.grossRevenue != null && parsed.grossRevenue > 0) {
-      // Pas de détail mais on a un revenu brut annuel : on répartit également selon le type
-      const counts = { single: 1, duplex: 2, triplex: 3, quadruplex: 4, "5plex": 5, "6plex": 6 };
-      const n = counts[draft.unitType] || 1;
-      const monthlyEach = Math.round((parsed.grossRevenue / 12) / n);
+    } else {
+      // Pas de loyers détaillés : initialise le bon nombre d'unités selon le type
+      const counts = { single: 1, duplex: 2, triplex: 3, quadruplex: 4, "5plex": 5, "6plex": 6, custom: 1 };
+      // Priorité : nombre de sous-types extraits > comptage par type
+      const n = subtypes.length > 0 ? subtypes.length : (counts[draft.unitType] || 3);
+      const monthlyEach = parsed.grossRevenue != null && parsed.grossRevenue > 0
+        ? Math.round((parsed.grossRevenue / 12) / n) : 0;
       draft.units = Array.from({ length: n }, (_, i) => ({
         name: "Logement " + (i + 1),
+        subtype: subtypes[i] || "",
         rent: monthlyEach,
         utilitiesIncluded: true,
         ownerOccupied: false
@@ -503,11 +720,19 @@
     if (parsed.rooms != null) draft.rooms = parsed.rooms;
     if (parsed.centrisUrl) draft.centrisUrl = parsed.centrisUrl;
     if (parsed.centrisId) draft.centrisId = parsed.centrisId;
-    if (!draft.name && parsed.address) {
-      draft.name = parsed.address.split(",")[0].trim();
+    // Nom auto : "Type + adresse"
+    const autoName = buildAnalysisName(parsed);
+    if (autoName && (!draft.name || draft.name.trim() === "" || draft.name === draft._lastAutoName)) {
+      draft.name = autoName;
+      draft._lastAutoName = autoName;
     }
-    if (!draft.name && parsed.rawTypeText) {
-      draft.name = parsed.rawTypeText.replace(/\s*à\s*vendre.*$/i, "").trim();
+    // Notes : description Centris
+    if (parsed.description) {
+      const existing = (draft.notes || "").trim();
+      const descBlock = "📝 Description Centris :\n" + parsed.description;
+      draft.notes = existing && !existing.includes("Description Centris")
+        ? existing + "\n\n" + descBlock
+        : descBlock;
     }
   }
 

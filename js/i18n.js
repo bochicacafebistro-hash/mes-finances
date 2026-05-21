@@ -299,6 +299,8 @@ const TRANSLATIONS = {
   re_field_management:   { fr: "Gestion immobilière (%)",       es: "Gestión inmobiliaria (%)" },
   re_field_management_hint:{ fr: "0% si autogéré. 5-8% pour un gestionnaire externe (calculé sur loyers nets de vacance).", es: "0% si autogestionas. 5-8% para gestor externo." },
   re_unit_label:         { fr: "Logement {n}",                  es: "Vivienda {n}" },
+  re_unit_subtype_placeholder:{ fr: "ex: 4½, 5½, 6½ pièces…",   es: "ej: 4½, 5½, 6½…" },
+  re_unit_subtype_label: { fr: "Type d'appartement",            es: "Tipo de apartamento" },
   re_unit_rent:          { fr: "Loyer mensuel",                 es: "Alquiler mensual" },
   re_unit_utilities:     { fr: "Tout inclus (chauffage/électricité)", es: "Todo incluido (calefacción/electricidad)" },
   re_unit_add:           { fr: "+ Logement",                    es: "+ Vivienda" },

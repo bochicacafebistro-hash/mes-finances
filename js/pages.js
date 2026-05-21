@@ -1930,9 +1930,9 @@ function reNewAnalysis() {
     buildingPortionPercent: 80, // % du prix attribué au bâtiment (pas le terrain)
     unitType: "triplex",
     units: [
-      { name: "Logement 1", rent: 0, utilitiesIncluded: true, ownerOccupied: false },
-      { name: "Logement 2", rent: 0, utilitiesIncluded: true, ownerOccupied: false },
-      { name: "Logement 3", rent: 0, utilitiesIncluded: true, ownerOccupied: false }
+      { name: "Logement 1", subtype: "", rent: 0, utilitiesIncluded: true, ownerOccupied: false },
+      { name: "Logement 2", subtype: "", rent: 0, utilitiesIncluded: true, ownerOccupied: false },
+      { name: "Logement 3", subtype: "", rent: 0, utilitiesIncluded: true, ownerOccupied: false }
     ],
     notes: ""
   };
@@ -3305,7 +3305,10 @@ function renderRealEstateEdit() {
             ${a.units.map((u, i) => `
               <div class="re-unit ${u.ownerOccupied ? "re-unit--owner" : ""}">
                 <div class="re-unit__head">
-                  <div class="re-unit__label">${t("re_unit_label").replace("{n}", i + 1)}</div>
+                  <div class="re-unit__label-wrap">
+                    <div class="re-unit__label">${t("re_unit_label").replace("{n}", i + 1)}</div>
+                    <input type="text" class="re-unit__subtype" placeholder="${t("re_unit_subtype_placeholder")}" value="${escAttr(u.subtype || "")}" oninput="reCurrent.units[${i}].subtype=this.value" maxlength="40" aria-label="${t("re_unit_subtype_label")}">
+                  </div>
                   ${u.ownerOccupied ? `<span class="re-unit__owner-badge">${icon("home", 12)} ${t("re_unit_owner_badge")}</span>` : ""}
                 </div>
                 <label class="re-checkbox re-checkbox--owner">
@@ -4290,14 +4293,15 @@ function reEdit(id) {
       reCurrent[key] = defaults[key];
     }
   }
-  // Assurer que chaque unité a les nouveaux champs
+  // Assurer que chaque unité a les nouveaux champs (incluant subtype)
   reCurrent.units = (reCurrent.units || []).map(u => ({
     name: u.name || "Logement",
+    subtype: u.subtype || "",
     rent: Number(u.rent) || 0,
     utilitiesIncluded: u.utilitiesIncluded !== undefined ? !!u.utilitiesIncluded : true,
     ownerOccupied: !!u.ownerOccupied
   }));
-  if (!reCurrent.units.length) reCurrent.units = [{ name: "Logement 1", rent: 0, utilitiesIncluded: true, ownerOccupied: false }];
+  if (!reCurrent.units.length) reCurrent.units = [{ name: "Logement 1", subtype: "", rent: 0, utilitiesIncluded: true, ownerOccupied: false }];
   reMode = "edit";
   renderPage();
 }
@@ -4476,12 +4480,12 @@ function reSetUnitType(type) {
     const cur = reCurrent.units || [];
     const newUnits = [];
     for (let i = 0; i < target; i++) {
-      newUnits.push(cur[i] || { name: `Logement ${i + 1}`, rent: 0, utilitiesIncluded: true, ownerOccupied: false });
+      newUnits.push(cur[i] || { name: `Logement ${i + 1}`, subtype: "", rent: 0, utilitiesIncluded: true, ownerOccupied: false });
     }
     reCurrent.units = newUnits;
   } else {
     if (!reCurrent.units || !reCurrent.units.length) {
-      reCurrent.units = [{ name: "Logement 1", rent: 0, utilitiesIncluded: true, ownerOccupied: false }];
+      reCurrent.units = [{ name: "Logement 1", subtype: "", rent: 0, utilitiesIncluded: true, ownerOccupied: false }];
     }
   }
   renderPage();
@@ -4489,7 +4493,7 @@ function reSetUnitType(type) {
 function reAddUnit() {
   if (!reCurrent) return;
   const idx = (reCurrent.units || []).length + 1;
-  reCurrent.units.push({ name: `Logement ${idx}`, rent: 0, utilitiesIncluded: true, ownerOccupied: false });
+  reCurrent.units.push({ name: `Logement ${idx}`, subtype: "", rent: 0, utilitiesIncluded: true, ownerOccupied: false });
   renderPage();
 }
 function reRemoveUnit(i) {

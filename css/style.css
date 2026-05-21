@@ -5457,3 +5457,31 @@ body.dark .centris-preview-box {
   text-align: right;
   word-break: break-word;
 }
+
+/* ─── Sous-type du logement (Type d'appartement : 4½, 5½, etc.) ──── */
+.re-unit__label-wrap {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  flex: 1;
+}
+.re-unit__subtype {
+  background: transparent;
+  border: none;
+  padding: 0;
+  margin: 0;
+  font-size: 12px;
+  font-weight: 400;
+  color: var(--text2);
+  font-style: italic;
+  width: 100%;
+  outline: none;
+}
+.re-unit__subtype::placeholder {
+  color: var(--text3);
+  opacity: 0.7;
+}
+.re-unit__subtype:focus {
+  color: var(--text);
+  font-style: normal;
+}
