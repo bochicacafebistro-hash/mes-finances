@@ -4170,35 +4170,34 @@ function renderAmortizationTable(a, m) {
   `;
 }
 
-// Génère le détail mensuel du cash flow (loyers − toutes les dépenses − hypothèque)
+// Génère le détail du cash flow avec 2 colonnes : annuel et mensuel.
+// Chaque ligne = { label, monthly: number (signé), kind: "income"|"expense" }
 function renderCashFlowBreakdown(m, a) {
   const rows = [];
   // Revenus
   if (m.grossMonthlyRent > 0) {
-    rows.push({ label: t("re_cf_gross_rent"), value: m.grossMonthlyRent, kind: "income" });
+    rows.push({ label: t("re_cf_gross_rent"), monthly: m.grossMonthlyRent, kind: "income" });
   }
-  // Vacance (déduction)
   if (m.vacancyLoss > 0) {
-    rows.push({ label: t("re_cf_vacancy"), value: -m.vacancyLoss / 12, kind: "expense" });
+    rows.push({ label: t("re_cf_vacancy"), monthly: -m.vacancyLoss / 12, kind: "expense" });
   }
-  // Charges opérationnelles — pour les éléments annuels, on indique aussi
-  // le total annuel à côté du label pour plus de clarté.
-  const annualHint = (n) => `<small style="color:var(--text3);margin-left:6px;font-weight:400">${fmtMoney(n)}/an</small>`;
-  if (m.municipalTax > 0) rows.push({ label: t("re_cf_municipal_tax") + annualHint(m.municipalTax), value: -m.municipalTax / 12, kind: "expense" });
-  if (m.schoolTax > 0)    rows.push({ label: t("re_cf_school_tax") + annualHint(m.schoolTax),       value: -m.schoolTax / 12,    kind: "expense" });
-  if (m.insurance > 0)    rows.push({ label: t("re_cf_insurance") + annualHint(m.insurance),       value: -m.insurance / 12,    kind: "expense" });
-  if (m.electricityMo > 0) rows.push({ label: t("re_cf_electricity"),  value: -m.electricityMo,     kind: "expense" });
+  // Charges opérationnelles (les valeurs m.municipalTax sont déjà annuelles)
+  if (m.municipalTax > 0) rows.push({ label: t("re_cf_municipal_tax"), monthly: -m.municipalTax / 12, kind: "expense" });
+  if (m.schoolTax > 0)    rows.push({ label: t("re_cf_school_tax"),    monthly: -m.schoolTax / 12,    kind: "expense" });
+  if (m.insurance > 0)    rows.push({ label: t("re_cf_insurance"),     monthly: -m.insurance / 12,    kind: "expense" });
+  if (m.electricityMo > 0) rows.push({ label: t("re_cf_electricity"),  monthly: -m.electricityMo,     kind: "expense" });
   if (m.otherServiceMo > 0) {
-    // Utilise le nom personnalisé saisi par l'utilisateur si disponible
     const otherLabel = (a && a.otherServiceName && a.otherServiceName.trim()) ? a.otherServiceName.trim() : t("re_cf_other_service");
-    rows.push({ label: otherLabel, value: -m.otherServiceMo, kind: "expense" });
+    rows.push({ label: otherLabel, monthly: -m.otherServiceMo, kind: "expense" });
   }
-  if (m.maintenance > 0)  rows.push({ label: t("re_cf_maintenance") + annualHint(m.maintenance),   value: -m.maintenance / 12,  kind: "expense" });
-  if (m.management > 0)   rows.push({ label: t("re_cf_management") + annualHint(m.management),     value: -m.management / 12,   kind: "expense" });
-  // Service de la dette
-  if (m.monthlyPmt > 0) rows.push({ label: t("re_cf_mortgage"), value: -m.monthlyPmt, kind: "expense" });
+  if (m.maintenance > 0)  rows.push({ label: t("re_cf_maintenance"),   monthly: -m.maintenance / 12,  kind: "expense" });
+  if (m.management > 0)   rows.push({ label: t("re_cf_management"),    monthly: -m.management / 12,   kind: "expense" });
+  if (m.monthlyPmt > 0)   rows.push({ label: t("re_cf_mortgage"),      monthly: -m.monthlyPmt,        kind: "expense" });
 
   if (rows.length === 0) return "";
+
+  // Helper : formate un montant signé "+1 234 $" / "−1 234 $"
+  const sgn = (v) => (v >= 0 ? "+" : "−") + fmtMoney(Math.abs(v));
 
   return `
     <details class="re-cf-breakdown">
@@ -4207,15 +4206,22 @@ function renderCashFlowBreakdown(m, a) {
         <span class="re-verdict-details__chevron">▾</span>
       </summary>
       <div class="re-cf-breakdown__body">
+        <div class="re-cf-row re-cf-row--head">
+          <span class="re-cf-row__label"></span>
+          <span class="re-cf-col-h">/ an</span>
+          <span class="re-cf-col-h">/ mois</span>
+        </div>
         ${rows.map(r => `
           <div class="re-cf-row re-cf-row--${r.kind}">
             <span class="re-cf-row__label">${r.label}</span>
-            <span class="re-cf-row__value">${r.value >= 0 ? '+' : '−'}${fmtMoney(Math.abs(r.value))}</span>
+            <span class="re-cf-col-a">${sgn(r.monthly * 12)}</span>
+            <span class="re-cf-col-m">${sgn(r.monthly)}</span>
           </div>
         `).join("")}
         <div class="re-cf-row re-cf-row--total">
           <span class="re-cf-row__label">${t("re_cf_total")}</span>
-          <span class="re-cf-row__value ${m.monthlyCashFlow >= 0 ? 're-cf-row__value--pos' : 're-cf-row__value--neg'}">${m.monthlyCashFlow >= 0 ? '+' : '−'}${fmtMoney(Math.abs(m.monthlyCashFlow))}</span>
+          <span class="re-cf-col-a ${m.monthlyCashFlow >= 0 ? 're-cf-row__value--pos' : 're-cf-row__value--neg'}">${sgn(m.monthlyCashFlow * 12)}</span>
+          <span class="re-cf-col-m ${m.monthlyCashFlow >= 0 ? 're-cf-row__value--pos' : 're-cf-row__value--neg'}">${sgn(m.monthlyCashFlow)}</span>
         </div>
       </div>
     </details>

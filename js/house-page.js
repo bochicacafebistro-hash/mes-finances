@@ -505,16 +505,17 @@ function renderHouseResults(a, m) {
 
     <details class="re-cashflow-detail" style="margin-top:12px">
       <summary>${t("house_breakdown_summary")}</summary>
-      <div class="re-cf-table">
-        <div class="re-cf-row"><span>${t("house_mortgage_pmt")}</span><span>${fmtMoney(m.monthlyPmt)}</span></div>
-        <div class="re-cf-row"><span>${t("re_field_municipal_tax")}<small style="color:var(--text3);margin-left:6px">${fmtMoney(Number(a.municipalTax)||0)}/an</small></span><span>${fmtMoney(m.munTaxM)}</span></div>
-        <div class="re-cf-row"><span>${t("re_field_school_tax")}<small style="color:var(--text3);margin-left:6px">${fmtMoney(Number(a.schoolTax)||0)}/an</small></span><span>${fmtMoney(m.schoolTaxM)}</span></div>
-        <div class="re-cf-row"><span>${t("re_field_insurance")}<small style="color:var(--text3);margin-left:6px">${fmtMoney(Number(a.insurance)||0)}/an</small></span><span>${fmtMoney(m.insuranceM)}</span></div>
-        <div class="re-cf-row"><span>${t("house_field_heating")}</span><span>${fmtMoney(m.heatingM)}</span></div>
-        <div class="re-cf-row"><span>${t("re_field_electricity")}</span><span>${fmtMoney(m.electricityM)}</span></div>
-        ${m.condoM > 0 ? `<div class="re-cf-row"><span>${t("house_field_condo_fees")}</span><span>${fmtMoney(m.condoM)}</span></div>` : ""}
-        <div class="re-cf-row"><span>${t("house_field_maintenance")}<small style="color:var(--text3);margin-left:6px">${(a.maintenancePercentOfPrice||0)}% du prix/an</small></span><span>${fmtMoney(m.maintM)}</span></div>
-        <div class="re-cf-row re-cf-row--total"><span>${t("house_total_monthly")}</span><span>${fmtMoney(m.totalMonthly)}</span></div>
+      <div class="re-cf-table re-cf-table--three">
+        <div class="re-cf-row re-cf-row--head"><span></span><span class="re-cf-col-h">/ an</span><span class="re-cf-col-h">/ mois</span></div>
+        <div class="re-cf-row"><span>${t("house_mortgage_pmt")}</span><span class="re-cf-col-a">${fmtMoney(m.monthlyPmt * 12)}</span><span class="re-cf-col-m">${fmtMoney(m.monthlyPmt)}</span></div>
+        <div class="re-cf-row"><span>${t("re_field_municipal_tax")}</span><span class="re-cf-col-a">${fmtMoney(Number(a.municipalTax)||0)}</span><span class="re-cf-col-m">${fmtMoney(m.munTaxM)}</span></div>
+        <div class="re-cf-row"><span>${t("re_field_school_tax")}</span><span class="re-cf-col-a">${fmtMoney(Number(a.schoolTax)||0)}</span><span class="re-cf-col-m">${fmtMoney(m.schoolTaxM)}</span></div>
+        <div class="re-cf-row"><span>${t("re_field_insurance")}</span><span class="re-cf-col-a">${fmtMoney(Number(a.insurance)||0)}</span><span class="re-cf-col-m">${fmtMoney(m.insuranceM)}</span></div>
+        <div class="re-cf-row"><span>${t("house_field_heating")}</span><span class="re-cf-col-a">${fmtMoney(m.heatingM * 12)}</span><span class="re-cf-col-m">${fmtMoney(m.heatingM)}</span></div>
+        <div class="re-cf-row"><span>${t("re_field_electricity")}</span><span class="re-cf-col-a">${fmtMoney(m.electricityM * 12)}</span><span class="re-cf-col-m">${fmtMoney(m.electricityM)}</span></div>
+        ${m.condoM > 0 ? `<div class="re-cf-row"><span>${t("house_field_condo_fees")}</span><span class="re-cf-col-a">${fmtMoney(m.condoM * 12)}</span><span class="re-cf-col-m">${fmtMoney(m.condoM)}</span></div>` : ""}
+        <div class="re-cf-row"><span>${t("house_field_maintenance")} <small style="color:var(--text3)">(${(a.maintenancePercentOfPrice||0)}%)</small></span><span class="re-cf-col-a">${fmtMoney(m.maintM * 12)}</span><span class="re-cf-col-m">${fmtMoney(m.maintM)}</span></div>
+        <div class="re-cf-row re-cf-row--total"><span>${t("house_total_monthly")}</span><span class="re-cf-col-a">${fmtMoney(m.totalMonthly * 12)}</span><span class="re-cf-col-m">${fmtMoney(m.totalMonthly)}</span></div>
       </div>
     </details>
   `;

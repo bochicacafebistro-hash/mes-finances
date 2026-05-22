@@ -5485,3 +5485,55 @@ body.dark .centris-preview-box {
   color: var(--text);
   font-style: normal;
 }
+
+/* ─── Breakdown 2 colonnes (annuel / mensuel) ───────────────────────── */
+.re-cf-table--three .re-cf-row,
+.re-cf-breakdown__body .re-cf-row {
+  display: grid;
+  grid-template-columns: 1fr auto auto;
+  gap: 14px;
+  align-items: baseline;
+  padding: 6px 0;
+}
+.re-cf-table--three .re-cf-row--head,
+.re-cf-breakdown__body .re-cf-row--head {
+  padding-bottom: 4px;
+  border-bottom: 1px solid var(--border, #e5e0d6);
+  margin-bottom: 4px;
+}
+.re-cf-col-h {
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  color: var(--text3);
+  text-align: right;
+  letter-spacing: 0.04em;
+  min-width: 80px;
+}
+.re-cf-col-a {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+  color: var(--text2);
+  min-width: 80px;
+}
+.re-cf-col-m {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+  color: var(--text);
+  font-weight: 500;
+  min-width: 80px;
+}
+.re-cf-table--three .re-cf-row--total,
+.re-cf-breakdown__body .re-cf-row--total {
+  border-top: 1px solid var(--border, #e5e0d6);
+  padding-top: 8px;
+  margin-top: 4px;
+  font-weight: 700;
+}
+.re-cf-table--three .re-cf-row--total .re-cf-col-a,
+.re-cf-table--three .re-cf-row--total .re-cf-col-m,
+.re-cf-breakdown__body .re-cf-row--total .re-cf-col-a,
+.re-cf-breakdown__body .re-cf-row--total .re-cf-col-m {
+  color: var(--text);
+  font-weight: 700;
+}
