@@ -183,8 +183,10 @@
   // document pour trouver des paires label/valeur typiques. Elle est
   // plus permissive mais filtre par plages de valeurs plausibles.
   function parseGlobalFinancialLabels(doc, result) {
-    // Pour chaque champ cible, on cherche des éléments contenant le label
-    // exact, puis on extrait la valeur dans le frère / parent.
+    // Centris affiche un toggle "Annuel | Mensuel" qui contient les DEUX valeurs
+    // dans le HTML (l'une est cachée par CSS, l'autre visible). Notre parseur
+    // de DOM les voit toutes les deux ! On collecte donc TOUTES les valeurs
+    // candidates pour chaque champ et on garde la plus grande (= annuelle).
     const targets = [
       {
         field: "municipalTax", min: 100, max: 100000,
@@ -204,13 +206,15 @@
       }
     ];
 
-    // Itère sur les éléments candidats (cellules de tableau surtout)
+    // Pour chaque target, on stocke la liste des valeurs candidates
+    const candidatesPerField = {};
+    for (const t of targets) candidatesPerField[t.field] = [];
+
     const candidates = doc.querySelectorAll("td, th, dt, dd, li, span, strong, div, p, label");
     for (const el of candidates) {
       const txt = (el.textContent || "").trim();
       if (!txt || txt.length > 50) continue;
       for (const target of targets) {
-        if (result[target.field] != null) continue; // déjà trouvé
         const matched = target.patterns.some(p => p.test(txt));
         if (!matched) continue;
         // Trouve la valeur : frère suivant > parent inline
@@ -228,10 +232,19 @@
         if (!value) continue;
         const v = parseMoney(value);
         if (v != null && v >= target.min && v <= target.max) {
-          result[target.field] = v;
-          result._foundFields.push(target.field + " (global)");
+          candidatesPerField[target.field].push(v);
         }
       }
+    }
+    // Pour chaque champ : si pas encore trouvé, prend la valeur MAXIMALE
+    // (Centris a Annuel + Mensuel dans le DOM ; on veut l'annuelle = plus grande).
+    for (const target of targets) {
+      if (result[target.field] != null) continue;
+      const arr = candidatesPerField[target.field];
+      if (!arr.length) continue;
+      const max = Math.max.apply(null, arr);
+      result[target.field] = max;
+      result._foundFields.push(target.field + " (global, max de " + arr.length + ")");
     }
     // Si on a bâtiment+terrain mais pas total, on additionne
     if (result.municipalAssessment == null &&
@@ -291,38 +304,48 @@
       if (!titleText || titleText.length > 80) continue;
       const lower = titleText.toLowerCase();
 
+      // Helper local : collecte TOUTES les valeurs candidates pour un label
+      // donné dans le sous-bloc, et retourne la PLUS GRANDE dans la plage valide.
+      // Indispensable parce que Centris a un toggle "Annuel / Mensuel" qui
+      // garde les DEUX valeurs dans le DOM (l'une cachée par CSS).
+      // On veut toujours l'annuelle = la plus grande.
+      const maxValueInSub = (sub, patterns, min, max) => {
+        const els = sub.querySelectorAll("td, th, dt, dd, div, span, li, p, h3, h4, strong");
+        const values = [];
+        for (const el of els) {
+          const text = (el.textContent || "").trim();
+          if (!text || text.length > 80) continue;
+          if (!patterns.some(p => p.test(text))) continue;
+          // Récupère la valeur via frère ou inline
+          let val = null;
+          let next = el.nextElementSibling;
+          while (next && !((next.textContent || "").trim())) next = next.nextElementSibling;
+          if (next) val = (next.textContent || "").trim();
+          if (!val) {
+            const parent = el.parentElement;
+            if (parent && parent !== sub) {
+              const full = (parent.textContent || "").trim();
+              val = full.replace(text, "").trim();
+            }
+          }
+          if (!val) continue;
+          const v = parseMoney(val);
+          if (v != null && v >= min && v <= max) values.push(v);
+        }
+        return values.length ? Math.max.apply(null, values) : null;
+      };
+
       // — Bloc ÉVALUATION MUNICIPALE (FR) / MUNICIPAL ASSESSMENT (EN) —
       if (!seenSections.has("eval") &&
           (/^évaluation\s+municipale/i.test(lower) || /^municipal\s+assessment/i.test(lower))) {
         const sub = extractSubSectionElement(titleEl);
         if (!sub) continue;
-        // Terrain / Land
-        const land = findValueByLabel(sub, [/^terrain\b/i, /^land\b/i, /terrain/i, /\bland\b/i]);
-        if (land) {
-          const v = parseMoney(land);
-          if (v != null && v > 100 && v < 100000000) {
-            result.municipalAssessmentLand = v;
-            result._foundFields.push("evalLand");
-          }
-        }
-        // Bâtiment / Building
-        const building = findValueByLabel(sub, [/^b[âa]timent\b/i, /^building\b/i, /b[âa]timent/i, /\bbuilding\b/i]);
-        if (building) {
-          const v = parseMoney(building);
-          if (v != null && v > 1000) {
-            result.municipalAssessmentBuilding = v;
-            result._foundFields.push("evalBuilding");
-          }
-        }
-        // Total (FR + EN, identique)
-        const total = findValueByLabel(sub, [/^total\b/i]);
-        if (total) {
-          const v = parseMoney(total);
-          if (v != null && v > 1000) {
-            result.municipalAssessment = v;
-            result._foundFields.push("evalTotal");
-          }
-        }
+        const land = maxValueInSub(sub, [/^terrain\b/i, /^land\b/i], 100, 100000000);
+        if (land != null) { result.municipalAssessmentLand = land; result._foundFields.push("evalLand"); }
+        const building = maxValueInSub(sub, [/^b[âa]timent\b/i, /^building\b/i], 1000, 100000000);
+        if (building != null) { result.municipalAssessmentBuilding = building; result._foundFields.push("evalBuilding"); }
+        const total = maxValueInSub(sub, [/^total\b/i], 1000, 100000000);
+        if (total != null) { result.municipalAssessment = total; result._foundFields.push("evalTotal"); }
         seenSections.add("eval");
       }
 
@@ -330,24 +353,10 @@
       else if (!seenSections.has("taxes") && /^taxes?\s*$/i.test(lower)) {
         const sub = extractSubSectionElement(titleEl);
         if (!sub) continue;
-        // FR "Municipales (2026)" / EN "Municipal (2026)" ou "Municipal Tax"
-        const mun = findValueByLabel(sub, [/^municipales?\b/i, /^municipal\b/i, /\bmunicipales?\b/i, /\bmunicipal\b/i]);
-        if (mun) {
-          const v = parseMoney(mun);
-          if (v != null && v < 100000) {
-            result.municipalTax = v;
-            result._foundFields.push("municipalTax");
-          }
-        }
-        // FR "Scolaires" / EN "School"
-        const school = findValueByLabel(sub, [/^scolaires?\b/i, /^school\b/i, /\bscolaires?\b/i, /\bschool\b/i]);
-        if (school) {
-          const v = parseMoney(school);
-          if (v != null && v < 50000) {
-            result.schoolTax = v;
-            result._foundFields.push("schoolTax");
-          }
-        }
+        const mun = maxValueInSub(sub, [/^municipales?\b/i, /^municipal\b/i], 100, 100000);
+        if (mun != null) { result.municipalTax = mun; result._foundFields.push("municipalTax"); }
+        const school = maxValueInSub(sub, [/^scolaires?\b/i, /^school\b/i], 50, 50000);
+        if (school != null) { result.schoolTax = school; result._foundFields.push("schoolTax"); }
         seenSections.add("taxes");
       }
 
