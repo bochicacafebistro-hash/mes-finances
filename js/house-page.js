@@ -507,13 +507,13 @@ function renderHouseResults(a, m) {
       <summary>${t("house_breakdown_summary")}</summary>
       <div class="re-cf-table">
         <div class="re-cf-row"><span>${t("house_mortgage_pmt")}</span><span>${fmtMoney(m.monthlyPmt)}</span></div>
-        <div class="re-cf-row"><span>${t("re_field_municipal_tax")} (/12)</span><span>${fmtMoney(m.munTaxM)}</span></div>
-        <div class="re-cf-row"><span>${t("re_field_school_tax")} (/12)</span><span>${fmtMoney(m.schoolTaxM)}</span></div>
-        <div class="re-cf-row"><span>${t("re_field_insurance")} (/12)</span><span>${fmtMoney(m.insuranceM)}</span></div>
+        <div class="re-cf-row"><span>${t("re_field_municipal_tax")}<small style="color:var(--text3);margin-left:6px">${fmtMoney(Number(a.municipalTax)||0)}/an</small></span><span>${fmtMoney(m.munTaxM)}</span></div>
+        <div class="re-cf-row"><span>${t("re_field_school_tax")}<small style="color:var(--text3);margin-left:6px">${fmtMoney(Number(a.schoolTax)||0)}/an</small></span><span>${fmtMoney(m.schoolTaxM)}</span></div>
+        <div class="re-cf-row"><span>${t("re_field_insurance")}<small style="color:var(--text3);margin-left:6px">${fmtMoney(Number(a.insurance)||0)}/an</small></span><span>${fmtMoney(m.insuranceM)}</span></div>
         <div class="re-cf-row"><span>${t("house_field_heating")}</span><span>${fmtMoney(m.heatingM)}</span></div>
         <div class="re-cf-row"><span>${t("re_field_electricity")}</span><span>${fmtMoney(m.electricityM)}</span></div>
         ${m.condoM > 0 ? `<div class="re-cf-row"><span>${t("house_field_condo_fees")}</span><span>${fmtMoney(m.condoM)}</span></div>` : ""}
-        <div class="re-cf-row"><span>${t("house_field_maintenance")} (1/12 × ${(a.maintenancePercentOfPrice||0)}%)</span><span>${fmtMoney(m.maintM)}</span></div>
+        <div class="re-cf-row"><span>${t("house_field_maintenance")}<small style="color:var(--text3);margin-left:6px">${(a.maintenancePercentOfPrice||0)}% du prix/an</small></span><span>${fmtMoney(m.maintM)}</span></div>
         <div class="re-cf-row re-cf-row--total"><span>${t("house_total_monthly")}</span><span>${fmtMoney(m.totalMonthly)}</span></div>
       </div>
     </details>

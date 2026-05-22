@@ -4181,18 +4181,20 @@ function renderCashFlowBreakdown(m, a) {
   if (m.vacancyLoss > 0) {
     rows.push({ label: t("re_cf_vacancy"), value: -m.vacancyLoss / 12, kind: "expense" });
   }
-  // Charges opérationnelles
-  if (m.municipalTax > 0) rows.push({ label: t("re_cf_municipal_tax"), value: -m.municipalTax / 12, kind: "expense" });
-  if (m.schoolTax > 0)    rows.push({ label: t("re_cf_school_tax"),    value: -m.schoolTax / 12,    kind: "expense" });
-  if (m.insurance > 0)    rows.push({ label: t("re_cf_insurance"),     value: -m.insurance / 12,    kind: "expense" });
+  // Charges opérationnelles — pour les éléments annuels, on indique aussi
+  // le total annuel à côté du label pour plus de clarté.
+  const annualHint = (n) => `<small style="color:var(--text3);margin-left:6px;font-weight:400">${fmtMoney(n)}/an</small>`;
+  if (m.municipalTax > 0) rows.push({ label: t("re_cf_municipal_tax") + annualHint(m.municipalTax), value: -m.municipalTax / 12, kind: "expense" });
+  if (m.schoolTax > 0)    rows.push({ label: t("re_cf_school_tax") + annualHint(m.schoolTax),       value: -m.schoolTax / 12,    kind: "expense" });
+  if (m.insurance > 0)    rows.push({ label: t("re_cf_insurance") + annualHint(m.insurance),       value: -m.insurance / 12,    kind: "expense" });
   if (m.electricityMo > 0) rows.push({ label: t("re_cf_electricity"),  value: -m.electricityMo,     kind: "expense" });
   if (m.otherServiceMo > 0) {
     // Utilise le nom personnalisé saisi par l'utilisateur si disponible
     const otherLabel = (a && a.otherServiceName && a.otherServiceName.trim()) ? a.otherServiceName.trim() : t("re_cf_other_service");
     rows.push({ label: otherLabel, value: -m.otherServiceMo, kind: "expense" });
   }
-  if (m.maintenance > 0)  rows.push({ label: t("re_cf_maintenance"),   value: -m.maintenance / 12,  kind: "expense" });
-  if (m.management > 0)   rows.push({ label: t("re_cf_management"),    value: -m.management / 12,   kind: "expense" });
+  if (m.maintenance > 0)  rows.push({ label: t("re_cf_maintenance") + annualHint(m.maintenance),   value: -m.maintenance / 12,  kind: "expense" });
+  if (m.management > 0)   rows.push({ label: t("re_cf_management") + annualHint(m.management),     value: -m.management / 12,   kind: "expense" });
   // Service de la dette
   if (m.monthlyPmt > 0) rows.push({ label: t("re_cf_mortgage"), value: -m.monthlyPmt, kind: "expense" });
 
