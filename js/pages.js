@@ -3041,6 +3041,8 @@ function renderRealEstateCompare() {
 
 function renderRealEstateEdit() {
   const a = reCurrent;
+  // Calcule les métriques pour afficher des résumés dans les titres des sections collapsibles
+  const _m = calculateRealEstateMetrics(a);
   let h = `<div class="serene-page re-page">
     <div class="serene-hero-header">
       <div>
@@ -3191,40 +3193,57 @@ function renderRealEstateEdit() {
               `}
               <small class="re-hint">${t("re_field_maintenance_hint")}</small>
             </div>
-            <div class="re-field">
-              <div class="re-field__head">
-                <span>${t("re_field_vacancy")}${reTip("re_tip_vacancy")}</span>
-                <label class="re-checkbox re-checkbox--inline">
-                  <input type="checkbox" ${a.vacancyEnabled !== false ? "checked" : ""} onchange="reCurrent.vacancyEnabled=this.checked;renderPage()">
-                  <span>${t("re_field_vacancy_enable")}</span>
-                </label>
+          </div>
+
+          <details class="re-advanced">
+            <summary class="re-advanced__summary">
+              <span>${icon("settings", 14)}</span>
+              <span>${t("re_section_advanced")}</span>
+              <span class="re-advanced__chevron">▾</span>
+            </summary>
+            <div class="re-fields re-fields--nested">
+              <div class="re-field">
+                <div class="re-field__head">
+                  <span>${t("re_field_vacancy")}${reTip("re_tip_vacancy")}</span>
+                  <label class="re-checkbox re-checkbox--inline">
+                    <input type="checkbox" ${a.vacancyEnabled !== false ? "checked" : ""} onchange="reCurrent.vacancyEnabled=this.checked;renderPage()">
+                    <span>${t("re_field_vacancy_enable")}</span>
+                  </label>
+                </div>
+                ${a.vacancyEnabled !== false ? `
+                  <div class="re-input-suffix">
+                    <input type="number" inputmode="decimal" min="0" max="50" step="any" value="${a.vacancyPercent ?? ""}" oninput="reCurrent.vacancyPercent=Math.min(50,Math.max(0,Number(this.value)||0));reRefresh()">
+                    <span class="re-input-suffix__symbol">%</span>
+                  </div>
+                ` : `<small class="re-hint" style="color:var(--text3);font-style:italic">${t("re_field_vacancy_ignored")}</small>`}
+                <small class="re-hint">${t("re_field_vacancy_hint")}</small>
               </div>
-              ${a.vacancyEnabled !== false ? `
+              <label class="re-field">
+                <span>${t("re_field_management")}${reTip("re_tip_management")}</span>
                 <div class="re-input-suffix">
-                  <input type="number" inputmode="decimal" min="0" max="50" step="any" value="${a.vacancyPercent ?? ""}" oninput="reCurrent.vacancyPercent=Math.min(50,Math.max(0,Number(this.value)||0));reRefresh()">
+                  <input type="number" inputmode="decimal" min="0" max="30" step="any"value="${a.managementPercent ?? ""}" oninput="reCurrent.managementPercent=Math.min(30,Math.max(0,Number(this.value)||0));reRefresh()">
                   <span class="re-input-suffix__symbol">%</span>
                 </div>
-              ` : `<small class="re-hint" style="color:var(--text3);font-style:italic">${t("re_field_vacancy_ignored")}</small>`}
-              <small class="re-hint">${t("re_field_vacancy_hint")}</small>
+                <small class="re-hint">${t("re_field_management_hint")}</small>
+              </label>
             </div>
-            <label class="re-field re-field--wide">
-              <span>${t("re_field_management")}${reTip("re_tip_management")}</span>
-              <div class="re-input-suffix">
-                <input type="number" inputmode="decimal" min="0" max="30" step="any"value="${a.managementPercent ?? ""}" oninput="reCurrent.managementPercent=Math.min(30,Math.max(0,Number(this.value)||0));reRefresh()">
-                <span class="re-input-suffix__symbol">%</span>
-              </div>
-              <small class="re-hint">${t("re_field_management_hint")}</small>
-            </label>
-          </div>
+          </details>
         </section>
 
-        <section class="re-block re-block--closing">
-          <h3 class="re-block__title">${icon("shield-check", 16)} <span>${t("re_section_closing")}</span></h3>
+        <details class="re-block re-block--collapsible re-block--closing">
+          <summary class="re-block__title re-block__title--summary">
+            ${icon("shield-check", 16)} <span>${t("re_section_closing")}</span>
+            <span class="re-block__summary-value">${fmtMoney(_m.closingCostsTotal || 0)}</span>
+            <span class="re-block__chevron">▾</span>
+          </summary>
           ${renderClosingCostsFields(a)}
-        </section>
+        </details>
 
-        <section class="re-block re-block--projection">
-          <h3 class="re-block__title">${icon("trending-up", 16)} <span>${t("re_section_projection")}</span></h3>
+        <details class="re-block re-block--collapsible re-block--projection">
+          <summary class="re-block__title re-block__title--summary">
+            ${icon("trending-up", 16)} <span>${t("re_section_projection")}</span>
+            <span class="re-block__chevron">▾</span>
+          </summary>
           <div class="re-fields">
             <label class="re-field">
               <span>${t("re_field_appreciation")}${reTip("re_tip_appreciation")}</span>
@@ -3261,10 +3280,14 @@ function renderRealEstateEdit() {
               <small class="re-hint">${t("re_field_stock_rate_hint")}</small>
             </label>
           </div>
-        </section>
+        </details>
 
-        <section class="re-block re-block--fiscal">
-          <h3 class="re-block__title">${icon("receipt", 16)} <span>${t("re_section_fiscal")}</span></h3>
+        <details class="re-block re-block--collapsible re-block--fiscal">
+          <summary class="re-block__title re-block__title--summary">
+            ${icon("receipt", 16)} <span>${t("re_section_fiscal")}</span>
+            ${a.fiscalEnabled ? `<span class="re-block__summary-value" style="color:var(--status-green)">${t("active") || "actif"}</span>` : ""}
+            <span class="re-block__chevron">▾</span>
+          </summary>
           <div class="re-fields">
             <label class="re-checkbox re-field--wide">
               <input type="checkbox" ${a.fiscalEnabled ? "checked" : ""} onchange="reCurrent.fiscalEnabled=this.checked;renderPage()">
@@ -3295,7 +3318,7 @@ function renderRealEstateEdit() {
               ` : ""}
             ` : ""}
           </div>
-        </section>
+        </details>
 
         <section class="re-block re-block--units">
           <h3 class="re-block__title">${icon("users", 16)} <span>${t("re_section_units")}</span>

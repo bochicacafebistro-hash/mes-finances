@@ -5537,3 +5537,114 @@ body.dark .centris-preview-box {
   color: var(--text);
   font-weight: 700;
 }
+
+/* ─── Sections collapsibles (details/summary) ─────────────────────── */
+.re-block--collapsible {
+  display: block;
+  margin-bottom: 16px;
+  padding: 0;
+  background: var(--surface, transparent);
+  border: 1px solid var(--border, #e5e0d6);
+  border-radius: 10px;
+  overflow: hidden;
+}
+body.dark .re-block--collapsible {
+  border-color: rgba(255, 255, 255, 0.08);
+}
+.re-block--collapsible[open] {
+  background: var(--surface-soft, #faf6f0);
+}
+body.dark .re-block--collapsible[open] {
+  background: rgba(255, 255, 255, 0.02);
+}
+
+.re-block__title--summary {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  cursor: pointer;
+  padding: 12px 16px;
+  margin: 0;
+  user-select: none;
+  list-style: none;
+  font-weight: 600;
+  font-size: 14px;
+  color: var(--text);
+  transition: background 0.15s ease;
+}
+.re-block__title--summary::-webkit-details-marker { display: none; }
+.re-block__title--summary:hover {
+  background: rgba(0, 0, 0, 0.025);
+}
+body.dark .re-block__title--summary:hover {
+  background: rgba(255, 255, 255, 0.025);
+}
+
+.re-block__summary-value {
+  margin-left: auto;
+  font-weight: 500;
+  font-size: 13px;
+  color: var(--text2);
+  font-variant-numeric: tabular-nums;
+}
+
+.re-block__chevron {
+  font-size: 12px;
+  color: var(--text3);
+  transition: transform 0.2s ease;
+  flex-shrink: 0;
+}
+.re-block--collapsible[open] .re-block__chevron {
+  transform: rotate(180deg);
+}
+
+.re-block--collapsible > .re-fields,
+.re-block--collapsible > div:not(summary),
+.re-block--collapsible > .re-closing-fields {
+  padding: 4px 16px 16px;
+}
+
+/* ─── Sous-bloc "Paramètres avancés" dans une section ──────────────── */
+.re-advanced {
+  margin-top: 12px;
+  border-top: 1px dashed var(--border, #e5e0d6);
+  padding-top: 8px;
+}
+.re-advanced__summary {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--text3);
+  padding: 6px 0;
+  user-select: none;
+  list-style: none;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+.re-advanced__summary::-webkit-details-marker { display: none; }
+.re-advanced__summary:hover { color: var(--text2); }
+.re-advanced__chevron {
+  margin-left: auto;
+  font-size: 10px;
+  transition: transform 0.2s ease;
+}
+.re-advanced[open] .re-advanced__chevron { transform: rotate(180deg); }
+.re-fields--nested {
+  padding-top: 8px;
+}
+
+/* ─── Marges réduites sur les pages d'analyse immobilier ──────────── */
+.serene-page.re-page {
+  padding-left: 20px;
+  padding-right: 20px;
+  max-width: none;
+}
+@media (max-width: 768px) {
+  .serene-page.re-page {
+    padding-left: 12px;
+    padding-right: 12px;
+  }
+}

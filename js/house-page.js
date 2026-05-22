@@ -395,8 +395,12 @@ function renderHouseEdit() {
           </div>
         </section>
 
-        <section class="re-block re-block--closing">
-          <h3 class="re-block__title">${icon("shield-check", 16)} <span>${t("re_section_closing")}</span></h3>
+        <details class="re-block re-block--collapsible re-block--closing">
+          <summary class="re-block__title re-block__title--summary">
+            ${icon("shield-check", 16)} <span>${t("re_section_closing")}</span>
+            <span class="re-block__summary-value">${fmtMoney(m.closingTotal || 0)}</span>
+            <span class="re-block__chevron">▾</span>
+          </summary>
           <div class="re-fields">
             <label class="re-field re-field--wide">
               <span style="display:flex;align-items:center;gap:8px">
@@ -431,7 +435,7 @@ function renderHouseEdit() {
               <small class="re-hint">${t("re_field_other_closing_hint")}</small>
             </label>
           </div>
-        </section>
+        </details>
 
         <section class="re-block re-block--notes">
           <h3 class="re-block__title">${icon("pencil", 16)} <span>${t("re_notes")}</span></h3>
