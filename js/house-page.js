@@ -45,6 +45,7 @@ function houseNewAnalysis() {
     landAreaSqft: null,
     bedrooms: null,
     bathrooms: null,
+    powderRooms: null,        // salles d'eau (sans bain)
     rooms: null,
     centrisUrl: "",
     centrisId: "",
@@ -278,6 +279,10 @@ function renderHouseEdit() {
             <label class="re-field">
               <span>${t("house_field_bathrooms")}</span>
               <input type="number" inputmode="numeric" min="0" max="20" value="${a.bathrooms ?? ""}" oninput="houseCurrent.bathrooms=Number(this.value)||null">
+            </label>
+            <label class="re-field">
+              <span>${t("house_field_powder_rooms")}</span>
+              <input type="number" inputmode="numeric" min="0" max="20" value="${a.powderRooms ?? ""}" oninput="houseCurrent.powderRooms=Number(this.value)||null">
             </label>
           </div>
         </section>

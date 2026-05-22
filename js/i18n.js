@@ -565,6 +565,7 @@ const TRANSLATIONS = {
   centris_field_land_area:{ fr: "Sup. du terrain",             es: "Sup. del terreno" },
   centris_field_bedrooms:{ fr: "Chambres",                     es: "Habitaciones" },
   centris_field_bathrooms:{ fr: "Salles de bain",              es: "Baños" },
+  centris_field_powder_short:{ fr: "salle d'eau",              es: "aseo" },
   centris_field_gross_rev:{ fr: "Revenus bruts (Centris)",     es: "Ingresos brutos (Centris)" },
   centris_field_units:   { fr: "Logements détectés",           es: "Viviendas detectadas" },
 
@@ -584,6 +585,7 @@ const TRANSLATIONS = {
   house_field_living_area:{ fr: "Superficie habitable",        es: "Superficie habitable" },
   house_field_bedrooms:  { fr: "Chambres",                     es: "Habitaciones" },
   house_field_bathrooms: { fr: "Salles de bain",               es: "Baños" },
+  house_field_powder_rooms:{ fr: "Salles d'eau",               es: "Aseos" },
   house_field_mun_assessment:{ fr: "Évaluation municipale ($)", es: "Evaluación municipal ($)" },
   house_field_mun_assessment_hint:{ fr: "Valeur du rôle foncier (totale, bâtiment + terrain). Sert à calculer le ratio prix / évaluation.", es: "Valor del rol catastral (total)." },
   house_field_heating:   { fr: "Chauffage",                    es: "Calefacción" },

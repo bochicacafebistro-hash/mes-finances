@@ -99,7 +99,7 @@
           if (it.description && !result.description) {
             const d = String(it.description).replace(/\s+/g, " ").trim();
             if (d.length > 30) {
-              result.description = d.length > 4000 ? d.slice(0, 4000) + "…" : d;
+              result.description = d;
               result._foundFields.push("description (JSON-LD)");
             }
           }
@@ -192,8 +192,8 @@
           const t = (el.textContent || "").trim().replace(/\s+/g, " ");
           // Adresse plausible : commence par chiffre, contient un nom de voie
           if (t && t.length > 10 && t.length < 200 &&
-              /^\d/.test(t) &&
-              /(rue|avenue|boulevard|chemin|route|place|côte|cote|allée|allee|impasse|montée|montee|terrasse|croissant|rang|av\.|boul\.|ch\.)/i.test(t)) {
+              /^\d+[a-z]?(?:\s*-\s*\d+[a-z]?)?[,\s]/i.test(t) &&
+              /(rue|avenue|boulevard|chemin|route|place|côte|cote|allée|allee|impasse|montée|montee|terrasse|croissant|rang|av\.|boul\.|ch\.|street|st\.|road|rd\.|drive|dr\.|lane|ln\.|highway|hwy|way|court|crescent|cres\.|circle|cir\.|trail|parkway)/i.test(t)) {
             result.address = t;
             result.addressFull = t;
             result._foundFields.push("address (" + sel + ")");
@@ -216,9 +216,23 @@
       for (const sel of descSelectors) {
         const el = doc.querySelector(sel);
         if (el) {
-          const d = (el.textContent || "").replace(/\s+/g, " ").trim();
+          // Préserve les sauts de paragraphe (<br>, <p>) et garde TOUT le texte
+          const clone = el.cloneNode(true);
+          clone.querySelectorAll("br").forEach(br => br.replaceWith("\n"));
+          clone.querySelectorAll("p, li, div").forEach(e => {
+            if (e.lastChild && e.lastChild.nodeType === 3) {
+              e.lastChild.textContent = (e.lastChild.textContent || "") + "\n";
+            } else {
+              e.appendChild(doc.createTextNode("\n"));
+            }
+          });
+          const d = (clone.textContent || "")
+            .replace(/[ \t]+/g, " ")
+            .replace(/\n{3,}/g, "\n\n")
+            .replace(/[ \t]*\n[ \t]*/g, "\n")
+            .trim();
           if (d.length > 40) {
-            result.description = d.length > 4000 ? d.slice(0, 4000) + "…" : d;
+            result.description = d; // intégral
             result._foundFields.push("description (" + sel + ")");
             break;
           }

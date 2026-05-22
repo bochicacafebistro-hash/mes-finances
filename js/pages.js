@@ -4614,8 +4614,8 @@ function openCentrisImportModal(target) {
           ${t("centris_import_label_url")}
         </label>
         <div style="display:flex;gap:8px;align-items:stretch;margin-bottom:6px">
-          <input id="centris-url-input" type="url" placeholder="${t("centris_import_url_placeholder")}" style="flex:1;font-size:13px;padding:9px 12px;border:1px solid var(--border, #ddd);border-radius:8px;background:var(--bg-soft, #fff);color:var(--text)">
-          <button class="btn btn-primary" id="centris-fetch-btn" onclick="centrisFetchFromUrl()" style="white-space:nowrap">
+          <input id="centris-url-input" type="text" inputmode="url" autocomplete="off" spellcheck="false" placeholder="${t("centris_import_url_placeholder")}" onkeydown="if(event.key==='Enter'){event.preventDefault();centrisFetchFromUrl();}" style="flex:1;font-size:13px;padding:9px 12px;border:1px solid var(--border, #ddd);border-radius:8px;background:var(--bg-soft, #fff);color:var(--text)">
+          <button type="button" class="btn btn-primary" id="centris-fetch-btn" onclick="centrisFetchFromUrl()" style="white-space:nowrap">
             ${icon("download", 14)} ${t("centris_import_load_url")}
           </button>
         </div>
@@ -4660,6 +4660,26 @@ function openCentrisImportModal(target) {
   }, 100);
 }
 
+// Normalise une URL collée par l'utilisateur : trim, ajoute https:// si
+// manquant. Retourne l'URL normalisée ou null si invalide.
+function normalizePropertyUrl(rawUrl) {
+  if (!rawUrl) return null;
+  let u = String(rawUrl).trim();
+  if (!u) return null;
+  // Enlève d'éventuels guillemets ou backticks copiés par accident
+  u = u.replace(/^[`"']+|[`"']+$/g, "");
+  // Ajoute https:// si l'URL commence directement par le domaine
+  if (!/^https?:\/\//i.test(u)) {
+    u = "https://" + u.replace(/^\/+/, "");
+  }
+  try {
+    const parsed = new URL(u);
+    return parsed.toString();
+  } catch (e) {
+    return null;
+  }
+}
+
 // Détecte le site immobilier depuis une URL : "centris" | "duproprio" | null
 function detectPropertySite(url) {
   if (!url) return null;
@@ -4687,18 +4707,33 @@ async function centrisFetchFromUrl() {
   const status = document.getElementById("centris-fetch-status");
   const ta = document.getElementById("centris-html-input");
   if (!inp || !btn || !status || !ta) return;
-  const url = (inp.value || "").trim();
-  if (!url) {
+  const raw = (inp.value || "").trim();
+  if (!raw) {
     status.style.color = "var(--status-red)";
     status.textContent = t("centris_import_url_required");
     return;
   }
-  // Validation côté client : doit être une URL Centris ou DuProprio
+  // Normalise (ajoute https:// si manquant, trim guillemets, etc.)
+  const url = normalizePropertyUrl(raw);
+  if (!url) {
+    status.style.color = "var(--status-red)";
+    status.textContent = t("centris_import_url_invalid");
+    return;
+  }
+  // Met à jour le champ avec l'URL normalisée pour que l'utilisateur voie
+  // ce qui est envoyé (transparence)
+  if (url !== raw) inp.value = url;
+  // Validation site
   const site = detectPropertySite(url);
   if (!site) {
     status.style.color = "var(--status-red)";
     status.textContent = t("centris_import_url_invalid");
     return;
+  }
+  // Avertissement si la fiche Centris est en anglais (/en/) — le parseur
+  // est optimisé pour les fiches françaises mais supporte aussi l'anglais.
+  if (site === "centris" && /\/en\//i.test(url)) {
+    // Ne bloque pas, juste un message indicatif (mis à jour après chargement)
   }
   // Stocke la source détectée pour que centrisAnalyze utilise le bon parseur
   window._propertySource = site;
@@ -4797,7 +4832,7 @@ function centrisAnalyze() {
         ${parsed.livingAreaSqft ? `<div class="centris-row"><span class="centris-row__label">${t("centris_field_living_area")}</span><span class="centris-row__value">${parsed.livingAreaSqft} pi²</span></div>` : ""}
         ${parsed.landAreaSqft ? `<div class="centris-row"><span class="centris-row__label">${t("centris_field_land_area")}</span><span class="centris-row__value">${parsed.landAreaSqft} pi²</span></div>` : ""}
         ${parsed.bedrooms != null ? `<div class="centris-row"><span class="centris-row__label">${t("centris_field_bedrooms")}</span><span class="centris-row__value">${parsed.bedrooms}</span></div>` : ""}
-        ${parsed.bathrooms != null ? `<div class="centris-row"><span class="centris-row__label">${t("centris_field_bathrooms")}</span><span class="centris-row__value">${parsed.bathrooms}</span></div>` : ""}
+        ${parsed.bathrooms != null ? `<div class="centris-row"><span class="centris-row__label">${t("centris_field_bathrooms")}</span><span class="centris-row__value">${parsed.bathrooms}${parsed.powderRooms ? ` + ${parsed.powderRooms} ${t("centris_field_powder_short")}` : ""}</span></div>` : ""}
         ${parsed.grossRevenue != null ? `<div class="centris-row"><span class="centris-row__label">${t("centris_field_gross_rev")}</span><span class="centris-row__value">${fmtMoney(parsed.grossRevenue)}/an</span></div>` : ""}
         ${unitsHtml}
         ${parsed.centrisId ? `<div class="centris-row"><span class="centris-row__label">Nº MLS</span><span class="centris-row__value">${esc(parsed.centrisId)}</span></div>` : ""}
