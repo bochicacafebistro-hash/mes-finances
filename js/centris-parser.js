@@ -177,6 +177,71 @@
     return units;
   }
 
+  // ── Fallback scan global pour taxes/évaluation ───────────────────
+  // Quand parseFinancialDetailsBlock ne trouve rien (structure HTML
+  // inhabituelle, fiches /en/, etc.), cette fonction scanne TOUT le
+  // document pour trouver des paires label/valeur typiques. Elle est
+  // plus permissive mais filtre par plages de valeurs plausibles.
+  function parseGlobalFinancialLabels(doc, result) {
+    // Pour chaque champ cible, on cherche des éléments contenant le label
+    // exact, puis on extrait la valeur dans le frère / parent.
+    const targets = [
+      {
+        field: "municipalTax", min: 100, max: 100000,
+        patterns: [/^municipal\s+tax(?:es)?$/i, /^taxes?\s+municipales?$/i, /^municipal(?:\s*\(\d{4}\))?$/i, /^municipales?(?:\s*\(\d{4}\))?$/i]
+      },
+      {
+        field: "schoolTax", min: 50, max: 50000,
+        patterns: [/^school\s+tax(?:es)?$/i, /^taxes?\s+scolaires?$/i, /^school(?:\s*\(\d{4}\))?$/i, /^scolaires?(?:\s*\(\d{4}\))?$/i]
+      },
+      {
+        field: "municipalAssessmentLand", min: 100, max: 100000000,
+        patterns: [/^land$/i, /^terrain$/i]
+      },
+      {
+        field: "municipalAssessmentBuilding", min: 1000, max: 100000000,
+        patterns: [/^building$/i, /^b[âa]timent$/i, /^improvements?$/i]
+      }
+    ];
+
+    // Itère sur les éléments candidats (cellules de tableau surtout)
+    const candidates = doc.querySelectorAll("td, th, dt, dd, li, span, strong, div, p, label");
+    for (const el of candidates) {
+      const txt = (el.textContent || "").trim();
+      if (!txt || txt.length > 50) continue;
+      for (const target of targets) {
+        if (result[target.field] != null) continue; // déjà trouvé
+        const matched = target.patterns.some(p => p.test(txt));
+        if (!matched) continue;
+        // Trouve la valeur : frère suivant > parent inline
+        let value = null;
+        let next = el.nextElementSibling;
+        while (next && !((next.textContent || "").trim())) next = next.nextElementSibling;
+        if (next) value = (next.textContent || "").trim();
+        if (!value) {
+          const parent = el.parentElement;
+          if (parent && parent !== doc.body) {
+            const full = (parent.textContent || "").trim();
+            value = full.replace(txt, "").trim();
+          }
+        }
+        if (!value) continue;
+        const v = parseMoney(value);
+        if (v != null && v >= target.min && v <= target.max) {
+          result[target.field] = v;
+          result._foundFields.push(target.field + " (global)");
+        }
+      }
+    }
+    // Si on a bâtiment+terrain mais pas total, on additionne
+    if (result.municipalAssessment == null &&
+        result.municipalAssessmentBuilding != null &&
+        result.municipalAssessmentLand != null) {
+      result.municipalAssessment = result.municipalAssessmentBuilding + result.municipalAssessmentLand;
+      result._foundFields.push("evalTotal (sum)");
+    }
+  }
+
   // ── Parseur "Détails financiers" (format Centris actuel) ─────────
   // Cherche le bloc .financial-details-tables (ou un fallback contenant
   // à la fois "Évaluation municipale" et "Taxes") et parse en contexte
@@ -688,7 +753,13 @@
     // confondre les deux "Total" et reconnaître "Municipales (2026)"
     // sans le mot "Taxes" devant.
     parseFinancialDetailsBlock(doc, result);
-    // Fallback ancien format / pages inhabituelles (FR + EN)
+    // Fallback scan global : utile pour les fiches /en/ ou structures inhabituelles
+    if (result.municipalTax == null || result.schoolTax == null ||
+        result.municipalAssessment == null || result.municipalAssessmentBuilding == null ||
+        result.municipalAssessmentLand == null) {
+      parseGlobalFinancialLabels(doc, result);
+    }
+    // Fallback ancien format / pages inhabituelles (FR + EN) — dernière chance
     if (result.municipalTax == null) {
       const munTax = findValueByLabel(doc, [/taxes?\s+municipales?/i, /municipal\s+tax/i]);
       if (munTax) {
