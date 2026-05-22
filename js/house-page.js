@@ -19,9 +19,9 @@ function houseNewAnalysis() {
     purchasePrice: 0,
     downPaymentMode: "percent",
     downPayment: 0,
-    downPaymentPercent: 20,
-    amortYears: 25,
-    interestRate: 5.5,
+    downPaymentPercent: 5,       // défaut : mise de fonds minimale légale
+    amortYears: 30,              // défaut : amortissement long
+    interestRate: 4,             // défaut : taux conservateur
     // Charges mensuelles (sauf taxes annuelles)
     municipalTax: 0,        // $/an
     schoolTax: 0,           // $/an
@@ -34,7 +34,7 @@ function houseNewAnalysis() {
     // Frais de clôture ponctuels (auto-calculés)
     welcomeTaxAuto: true,
     welcomeTax: 0,
-    notaryFees: 1500,
+    notaryFees: 2500,            // défaut prudent
     inspectionFees: 600,
     otherClosingFees: 0,
     schlAuto: true,

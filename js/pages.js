@@ -1883,11 +1883,11 @@ function reNewAnalysis() {
     address: "",
     purchasePrice: 0,
     // Mise de fond : peut être saisie en montant ou en pourcentage
-    downPaymentMode: "amount",   // "amount" | "percent"
+    downPaymentMode: "percent",  // "amount" | "percent"
     downPayment: 0,
-    downPaymentPercent: 20,
-    amortYears: 25,
-    interestRate: 5.5,
+    downPaymentPercent: 5,       // défaut : mise de fonds minimale légale
+    amortYears: 30,              // défaut : amortissement long
+    interestRate: 4,             // défaut : taux conservateur
     paymentFrequency: "monthly",
     municipalTax: 0,
     schoolTax: 0,
@@ -1917,7 +1917,7 @@ function reNewAnalysis() {
     // Frais de clôture (ponctuels, payés à l'achat) — auto-calculés mais modifiables
     welcomeTaxAuto: true,      // si true, recalculer auto selon prix
     welcomeTax: 0,             // taxe de bienvenue Qc
-    notaryFees: 1500,          // honoraires notaire
+    notaryFees: 2500,          // honoraires notaire (défaut prudent)
     inspectionFees: 600,       // inspection pré-achat
     otherClosingFees: 0,       // autres (assurance titre, etc.)
     // Assurance hypothécaire SCHL (si DP < 20%, ajoutée au prêt)
