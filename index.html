@@ -22,10 +22,10 @@
   <link rel="apple-touch-icon" sizes="180x180" href="images/apple-touch-icon.png"/>
   <link rel="apple-touch-icon" sizes="192x192" href="images/icon-192.png"/>
 
-  <!-- Polices -->
+  <!-- Polices (Crystalline : Geist + Geist Mono) -->
   <link rel="preconnect" href="https://fonts.googleapis.com"/>
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet"/>
+  <link href="https://fonts.googleapis.com/css2?family=Geist:wght@300..700&family=Geist+Mono:wght@400..600&display=swap" rel="stylesheet"/>
 
   <!-- Styles -->
   <link rel="stylesheet" href="css/style.css"/>
@@ -42,30 +42,27 @@
 <div id="login-screen"></div>
 
 <div id="app-shell" style="display:none">
-  <div class="app-wrap">
+  <div class="cr-app">
 
-    <!-- SIDEBAR -->
-    <aside class="sidebar" id="sidebar" aria-label="Navigation principale">
-      <div class="sidebar-logo">
-        <div class="logo-name">MES FINAN<span>CES</span></div>
-        <div class="logo-sub">Gestion perso</div>
+    <!-- HEADER HORIZONTAL (Crystalline) -->
+    <header class="cr-header" id="sidebar" aria-label="Navigation principale">
+      <div class="cr-header__left">
+        <div class="cr-logo">
+          <div class="cr-logo__mark" aria-hidden="true"></div>
+          <span class="cr-logo__text">MesFinances</span>
+        </div>
+        <nav class="cr-nav" id="sidebar-nav" aria-label="Sections"></nav>
       </div>
-      <nav class="sidebar-nav" id="sidebar-nav" aria-label="Sections"></nav>
-      <div class="sidebar-bottom">
-        <button class="btn-icon-sm" onclick="toggleDark()" id="dark-btn"></button>
-        <button class="btn-icon-sm" onclick="toggleUILang()" id="lang-btn"></button>
-        <button class="btn-icon-sm" onclick="logout()" id="logout-btn" style="flex:1"></button>
+      <div class="cr-header__right">
+        <button class="cr-icon-btn" onclick="toggleDark()" id="dark-btn" aria-label="Mode sombre"></button>
+        <button class="cr-icon-btn" onclick="toggleUILang()" id="lang-btn" aria-label="Langue"></button>
+        <button class="cr-icon-btn cr-icon-btn--text" onclick="logout()" id="logout-btn" aria-label="Déconnexion"></button>
+        <button class="cr-icon-btn cr-mobile-menu" onclick="toggleSidebar()" id="sidebar-toggle-btn" aria-label="Menu"></button>
       </div>
-    </aside>
+    </header>
 
     <!-- MAIN -->
-    <main class="main" id="main-area">
-      <header class="topbar">
-        <div style="display:flex;align-items:center;gap:12px">
-          <button class="btn-icon-sm" onclick="toggleSidebar()" aria-label="Menu" id="sidebar-toggle-btn" style="border:1px solid var(--border-strong);color:var(--text2)"></button>
-          <h1 class="topbar-title" id="topbar-title">Tableau de bord</h1>
-        </div>
-      </header>
+    <main class="cr-main" id="main-area">
       <div id="page-content"></div>
     </main>
 
@@ -93,7 +90,7 @@
   document.documentElement.lang = getUILang() === "es" ? "es" : "fr-CA";
   initDark();
   document.getElementById("sidebar-toggle-btn").innerHTML = icon("menu", 18);
-  document.getElementById("logout-btn").innerHTML = icon("log-out", 14) + ' <span>' + t("logout") + '</span>';
+  // Le logout-btn est rempli par buildSidebar() (avatar avec initiale)
   if (!restoreSession()) showLogin();
 
   if ('serviceWorker' in navigator) {

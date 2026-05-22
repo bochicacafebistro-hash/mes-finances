@@ -2,30 +2,28 @@
 
 function buildSidebar() {
   const nav = document.getElementById("sidebar-nav"); if (!nav) return;
+  // Nav horizontale Crystalline : items à plat, pas de sous-sections
   const items = [
-    { section: t("nav_section_main") },
-    { icon: "bar-chart",    label: t("nav_dashboard"),     page: "dashboard" },
-    { icon: "clipboard",    label: t("nav_transactions"),  page: "transactions" },
-    { icon: "wallet",       label: t("nav_accounts"),      page: "accounts" },
-    { section: t("nav_section_planning") },
-    { icon: "trending-up",  label: t("nav_budget"),        page: "budget" },
-    { icon: "refresh",      label: t("nav_subscriptions"), page: "subscriptions" },
-    { section: t("nav_section_projects") },
-    { icon: "home",         label: t("nav_realestate"),    page: "realestate" },
-    { icon: "home",         label: t("nav_house"),         page: "house" },
-    { section: t("nav_section_settings") },
-    { icon: "tag",          label: t("nav_categories"),    page: "categories" },
+    { label: t("nav_dashboard"),     page: "dashboard" },
+    { label: t("nav_transactions"),  page: "transactions" },
+    { label: t("nav_accounts"),      page: "accounts" },
+    { label: t("nav_budget"),        page: "budget" },
+    { label: t("nav_subscriptions"), page: "subscriptions" },
+    { label: t("nav_realestate"),    page: "realestate" },
+    { label: t("nav_house"),         page: "house" },
+    { label: t("nav_categories"),    page: "categories" },
   ];
 
-  nav.innerHTML = items.map(item => {
-    if (item.section) return `<div class="nav-section">${item.section}</div>`;
-    return `<div class="nav-item ${activePage === item.page ? "active" : ""}" onclick="navTo('${item.page}')" role="button" tabindex="0" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();navTo('${item.page}')}">
-      <span class="icon">${icon(item.icon, 18)}</span>
-      <span>${item.label}</span>
-    </div>`;
-  }).join("");
+  nav.innerHTML = items.map(item => `
+    <a class="cr-nav__item ${activePage === item.page ? "is-active" : ""}"
+       onclick="navTo('${item.page}')"
+       role="button" tabindex="0"
+       onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();navTo('${item.page}')}">
+      ${item.label}
+    </a>
+  `).join("");
 
-  // Boutons dark + lang + logout
+  // Boutons dark + lang + logout (en haut à droite)
   const darkBtn = document.getElementById("dark-btn");
   if (darkBtn) {
     darkBtn.innerHTML = icon(darkMode ? "sun" : "moon", 14);
@@ -34,15 +32,15 @@ function buildSidebar() {
   }
   const logoutBtn = document.getElementById("logout-btn");
   if (logoutBtn) {
-    // Affiche le nom de l'usager connecté à côté de l'icône de déconnexion
-    const userLabel = currentUserName ? ` <span style="margin-right:6px;opacity:0.85">${esc(currentUserName)}</span>` : "";
-    logoutBtn.innerHTML = userLabel + icon("log-out", 14) + ` <span>${t("logout")}</span>`;
+    // Avatar circulaire Crystalline avec initiale + label déconnexion en sous-titre
+    const initial = currentUserName ? esc(currentUserName.charAt(0).toUpperCase()) : "?";
+    logoutBtn.innerHTML = `<span class="cr-avatar">${initial}</span>`;
     logoutBtn.setAttribute("aria-label", t("logout"));
     logoutBtn.setAttribute("title", currentUserName ? `${currentUserName} — ${t("logout")}` : t("logout"));
   }
   const langBtn = document.getElementById("lang-btn");
   if (langBtn) {
-    langBtn.innerHTML = `<strong>${getUILang().toUpperCase()}</strong>`;
+    langBtn.innerHTML = `<strong style="font-size:11px;font-weight:600;letter-spacing:0.02em">${getUILang().toUpperCase()}</strong>`;
     langBtn.setAttribute("aria-label", t("language"));
     langBtn.setAttribute("title", getUILang() === "fr" ? "Français → Español" : "Español → Français");
   }
@@ -58,13 +56,8 @@ function navTo(page) {
 }
 
 function toggleSidebar() {
-  if (window.innerWidth <= 768) {
-    document.getElementById("sidebar").classList.toggle("mobile-open");
-  } else {
-    sidebarOpen = !sidebarOpen;
-    document.getElementById("sidebar").classList.toggle("hidden", !sidebarOpen);
-    document.getElementById("main-area").classList.toggle("full", !sidebarOpen);
-  }
+  // Mobile : ouvre/ferme le menu de navigation horizontal
+  document.getElementById("sidebar").classList.toggle("cr-header--mobile-open");
 }
 
 function initMobileMenu() {

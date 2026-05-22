@@ -5,59 +5,73 @@
 *{box-sizing:border-box;margin:0;padding:0}
 
 :root{
-  /* ── Bright & Clear — palette "Emeraude + Orange" ─── */
-  --bg:#fafafa;              /* blanc cassé — fond principal */
-  --surface:#ffffff;         /* blanc pur — cartes */
-  --surface2:#f4f4f5;        /* gris très clair — variantes */
-  --surface3:#e8e8eb;        /* accents discrets */
-  --border:rgba(17,24,39,.08);
-  --border-strong:rgba(17,24,39,.16);
+  /* ═══════════════════════════════════════════════════════════════
+     CRYSTALLINE — Minimaliste précis, blanc + indigo
+     ═══════════════════════════════════════════════════════════════ */
+
+  /* ── Surfaces ─────────────────────────────────────── */
+  --bg:#ffffff;              /* fond principal — blanc pur */
+  --surface:#ffffff;         /* cartes / containers */
+  --surface2:#fafbfc;        /* headers de tables, hovers légers */
+  --surface3:#f4f5f8;        /* chips, icon backgrounds */
+  --surface-soft:#fafbfc;    /* alias compat */
+  --bg-soft:#ffffff;
+  --border:#eaecef;          /* bordure forte */
+  --border-strong:#eaecef;
+  --border-soft:#f1f3f6;     /* bordure faible (très subtile) */
 
   /* ── Texte ────────────────────────────────────────── */
-  --text:#0f172a;            /* slate-900 */
-  --text2:#334155;           /* slate-700 */
-  --text3:#64748b;           /* slate-500 (muted) */
+  --text:#0e1116;            /* texte principal — noir presque pur */
+  --text2:#5a6270;           /* texte secondaire */
+  --text3:#8a909a;           /* muted / hints */
+  --text-muted:#7a8290;      /* très muted */
 
-  /* ── Accent vert émeraude vif ─────────────────────── */
-  --accent:#10b981;          /* emerald-500 */
-  --accent-hover:#059669;    /* emerald-600 */
-  --accent-soft:#34d399;     /* emerald-400 */
+  /* ── Accent indigo UNIQUE (toute l'app) ───────────── */
+  --accent:#4338ca;          /* indigo 700 — UN SEUL accent */
+  --accent-hover:#3730a3;
+  --accent-soft:#6366f1;
   --accent-text:#ffffff;
+  --accent-bg:rgba(67,56,202,.08);  /* fond léger pour chips, hovers */
 
-  /* ── Accents colorés (compat ancien CSS, ravivés) ─ */
-  --yellow:#f59e0b;          /* amber-500 */
-  --yellow-hover:#d97706;    /* amber-600 */
-  --yellow-soft:#fef3c7;     /* amber-100 */
-  --yellow-text:#92400e;     /* amber-800 */
-  --blue:#2563eb;            /* blue-600 */
-  --blue-hover:#1d4ed8;      /* blue-700 */
-  --blue-text:#1e40af;       /* blue-800 */
-  --red:#ef4444;             /* red-500 */
-  --red-hover:#dc2626;       /* red-600 */
+  /* ── Accents secondaires (compat ancien CSS) ─────── */
+  --yellow:#d4a13a;          /* doré — utilisé pour pastilles "À vérifier" */
+  --yellow-hover:#b8861f;
+  --yellow-soft:rgba(212,161,58,.10);
+  --yellow-text:#92400e;
+  --blue:#4338ca;            /* aligne sur indigo */
+  --blue-hover:#3730a3;
+  --blue-text:#4338ca;
+  --red:#d44e3a;             /* négatif / warning */
+  --red-hover:#b53d2c;
 
-  /* ── États (vifs) ─────────────────────────────────── */
-  --status-red:#ef4444;
-  --status-red-bg:rgba(239,68,68,.08);
-  --status-red-border:rgba(239,68,68,.24);
-  --status-yellow:#f97316;   /* orange-500 — alertes */
-  --status-yellow-bg:rgba(249,115,22,.10);
-  --status-yellow-border:rgba(249,115,22,.28);
-  --status-yellow-vivid:#f97316;
-  --status-green:#10b981;    /* emerald — status ok */
-  --status-green-bg:rgba(16,185,129,.10);
-  --status-green-border:rgba(16,185,129,.28);
-  --status-blue:#2563eb;
-  --status-blue-bg:rgba(37,99,235,.08);
-  --status-blue-border:rgba(37,99,235,.24);
+  /* ── États sémantiques (Crystalline) ──────────────── */
+  --status-red:#d44e3a;
+  --status-red-bg:rgba(212,78,58,.08);
+  --status-red-border:rgba(212,78,58,.24);
+  --status-yellow:#d4a13a;
+  --status-yellow-bg:rgba(212,161,58,.10);
+  --status-yellow-border:rgba(212,161,58,.28);
+  --status-yellow-vivid:#d4a13a;
+  --status-orange:#d4a13a;   /* alias */
+  --status-green:#4338ca;    /* succès = indigo (pas vert) selon spec Crystalline */
+  --status-green-bg:rgba(67,56,202,.08);
+  --status-green-border:rgba(67,56,202,.24);
+  --status-blue:#4338ca;
+  --status-blue-bg:rgba(67,56,202,.08);
+  --status-blue-border:rgba(67,56,202,.24);
 
-  /* ── Sidebar ──────────────────────────────────────── */
-  --header-from:#0f172a;     /* slate-900 */
-  --header-to:#1e293b;       /* slate-800 */
+  /* ── Header / nav ─────────────────────────────────── */
+  --header-from:#ffffff;
+  --header-to:#ffffff;
 
-  /* ── Typographie Inter unique ─────────────────────── */
-  --font-heading:'Inter','Helvetica Neue',Helvetica,Arial,sans-serif;
-  --font-body:'Inter','Helvetica Neue',Helvetica,Arial,sans-serif;
-  --font-mono:'JetBrains Mono',ui-monospace,monospace;
+  /* ── Typographie Geist (Crystalline) ──────────────── */
+  --font-heading:'Geist','Inter','Helvetica Neue',Helvetica,Arial,sans-serif;
+  --font-body:'Geist','Inter','Helvetica Neue',Helvetica,Arial,sans-serif;
+  --font-serif:'Geist','Inter',sans-serif;  /* override — plus de Fraunces */
+  --font-mono:'Geist Mono','JetBrains Mono',ui-monospace,monospace;
+  --c-display:'Geist','Inter',sans-serif;
+  --c-body:'Geist','Inter',sans-serif;
+  --c-mono:'Geist Mono','JetBrains Mono',monospace;
 
   /* ── Typographie : Échelle ────────────────────────── */
   --fs-xs:11px;
@@ -79,19 +93,28 @@
   --sp-7:32px;
   --sp-8:48px;
 
-  /* ── Rayons ───────────────────────────────────────── */
-  --radius-sm:4px;
-  --radius-md:8px;
-  --radius-lg:12px;
-  --radius-xl:16px;
-  --radius-pill:20px;
+  /* ── Rayons (Crystalline : 7/10/4) ────────────────── */
+  --radius-sm:4px;    /* petits tags */
+  --radius-md:7px;    /* boutons, chips, inputs */
+  --radius-lg:10px;   /* conteneurs / cards */
+  --radius-xl:12px;
+  --radius-pill:100px;
   --radius-full:50%;
 
-  /* ── Ombres ───────────────────────────────────────── */
-  --shadow-sm:0 1px 3px rgba(14,14,14,.05);
-  --shadow-md:0 4px 12px rgba(14,14,14,.08);
-  --shadow-lg:0 10px 28px rgba(26,16,16,.12);
-  --shadow-modal:0 20px 60px rgba(14,14,14,.25);
+  /* ── Ombres (Crystalline : minimales — pas d'ombres en général) ─ */
+  --shadow-sm:none;
+  --shadow-md:none;
+  --shadow-lg:0 4px 16px rgba(14,17,22,.06);  /* uniquement pour modal */
+  --shadow-modal:0 20px 60px rgba(14,17,22,.18);
+
+  /* ── Crystalline tokens explicites (compat code futur) ── */
+  --c-bg:#ffffff;
+  --c-ink:#0e1116;
+  --c-accent:#4338ca;
+  --c-border:#eaecef;
+  --c-border-soft:#f1f3f6;
+  --c-surface-2:#fafbfc;
+  --c-surface-3:#f4f5f8;
 
   /* ── Transitions ──────────────────────────────────── */
   --transition-fast:.15s ease;
@@ -102,48 +125,249 @@
    DARK MODE (palette adaptée aux yeux fatigués mais on-brand)
    ═══════════════════════════════════════════════════════════════ */
 .dark{
-  --bg:#0b1220;              /* slate très sombre */
-  --surface:#111827;         /* slate-900 */
-  --surface2:#0f172a;
-  --surface3:#1f2937;        /* slate-800 */
-  --border:rgba(255,255,255,.08);
-  --border-strong:rgba(255,255,255,.18);
+  /* ── CRYSTALLINE DARK ─────────────────────────────── */
+  --bg:#0c0d10;              /* fond principal */
+  --surface:#13151a;         /* cartes */
+  --surface2:#13151a;        /* alias */
+  --surface3:#22262c;        /* surface 3 */
+  --surface-soft:#13151a;
+  --bg-soft:#0c0d10;
+  --border:#1c1f25;          /* bordure forte */
+  --border-strong:#22262c;
+  --border-soft:#22262c;
 
-  --text:#f8fafc;            /* slate-50 */
-  --text2:#cbd5e1;           /* slate-300 */
-  --text3:#94a3b8;           /* slate-400 */
+  --text:#e8eaef;            /* texte principal */
+  --text2:#a4abb6;           /* secondaire */
+  --text3:#7a8290;           /* muted */
+  --text-muted:#7a8290;
 
-  --accent:#34d399;          /* emerald-400 — plus vif en dark */
-  --accent-hover:#6ee7b7;
-  --accent-soft:#10b981;
-  --accent-text:#0b1220;
+  /* L'accent indigo reste le même en dark (Crystalline spec) */
+  --accent:#4338ca;
+  --accent-hover:#5b50d9;
+  --accent-soft:#6366f1;
+  --accent-text:#ffffff;
+  --accent-bg:rgba(67,56,202,.18);  /* plus vif en dark */
 
-  --yellow:#fbbf24;          /* amber-400 */
-  --yellow-hover:#f59e0b;
-  --yellow-soft:rgba(251,191,36,.15);
-  --yellow-text:#fde68a;
-  --blue:#60a5fa;
-  --blue-hover:#3b82f6;
-  --blue-text:#93c5fd;
-  --red:#f87171;
-  --red-hover:#ef4444;
+  --yellow:#d4a13a;
+  --yellow-hover:#e6b34c;
+  --yellow-soft:rgba(212,161,58,.18);
+  --yellow-text:#f0c674;
+  --blue:#4338ca;
+  --blue-hover:#5b50d9;
+  --blue-text:#6366f1;
+  --red:#f97f6b;             /* erreur (Crystalline dark) */
+  --red-hover:#fb9384;
 
-  --status-red:#f87171;
-  --status-red-bg:rgba(248,113,113,.14);
-  --status-red-border:rgba(248,113,113,.3);
-  --status-yellow:#fb923c;   /* orange-400 */
-  --status-yellow-bg:rgba(251,146,60,.14);
-  --status-yellow-border:rgba(251,146,60,.32);
-  --status-yellow-vivid:#fb923c;
-  --status-green:#34d399;
-  --status-green-bg:rgba(52,211,153,.14);
-  --status-green-border:rgba(52,211,153,.3);
-  --status-blue:#60a5fa;
-  --status-blue-bg:rgba(96,165,250,.14);
-  --status-blue-border:rgba(96,165,250,.3);
+  --status-red:#f97f6b;
+  --status-red-bg:rgba(249,127,107,.18);
+  --status-red-border:rgba(249,127,107,.3);
+  --status-yellow:#d4a13a;
+  --status-yellow-bg:rgba(212,161,58,.18);
+  --status-yellow-border:rgba(212,161,58,.32);
+  --status-yellow-vivid:#d4a13a;
+  --status-orange:#d4a13a;
+  --status-green:#4338ca;    /* succès = indigo en dark aussi */
+  --status-green-bg:rgba(67,56,202,.18);
+  --status-green-border:rgba(67,56,202,.3);
+  --status-blue:#4338ca;
+  --status-blue-bg:rgba(67,56,202,.18);
+  --status-blue-border:rgba(67,56,202,.3);
 
-  --header-from:#020617;
-  --header-to:#0b1220;
+  --header-from:#0c0d10;
+  --header-to:#13151a;
+
+  /* Crystalline tokens explicites */
+  --c-bg:#0c0d10;
+  --c-ink:#e8eaef;
+  --c-border:#1c1f25;
+  --c-border-soft:#22262c;
+  --c-surface-2:#13151a;
+  --c-surface-3:#22262c;
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   CRYSTALLINE SHELL — Nav horizontale + main pleine largeur
+   ═══════════════════════════════════════════════════════════════ */
+
+.cr-app {
+  min-height: 100vh;
+  background: var(--bg);
+  color: var(--text);
+  font-family: var(--font-body);
+  font-size: 14.5px;
+  line-height: 1.5;
+  letter-spacing: -0.005em;
+}
+
+/* ─── Header sticky avec blur ───────────────────────────────────── */
+.cr-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 14px 40px;
+  border-bottom: 1px solid var(--border);
+  position: sticky;
+  top: 0;
+  z-index: 5;
+  background: rgba(255, 255, 255, 0.85);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  gap: 16px;
+  flex-wrap: wrap;
+}
+body.dark .cr-header {
+  background: rgba(12, 13, 16, 0.85);
+}
+
+.cr-header__left {
+  display: flex;
+  align-items: center;
+  gap: 28px;
+  flex-wrap: wrap;
+}
+.cr-header__right {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+/* ─── Logo Crystalline (carré indigo avec petit carré blanc) ─────── */
+.cr-logo {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-family: var(--font-heading);
+  font-size: 15px;
+  font-weight: 600;
+  letter-spacing: -0.015em;
+  color: var(--text);
+}
+.cr-logo__mark {
+  width: 18px;
+  height: 18px;
+  background: var(--accent);
+  border-radius: 4px;
+  position: relative;
+}
+.cr-logo__mark::after {
+  content: "";
+  position: absolute;
+  inset: 4px;
+  background: var(--bg);
+  border-radius: 1px;
+}
+
+/* ─── Items de navigation horizontaux ───────────────────────────── */
+.cr-nav {
+  display: flex;
+  gap: 4px;
+  flex-wrap: wrap;
+}
+.cr-nav__item {
+  padding: 6px 10px;
+  border-radius: 6px;
+  font-size: 13px;
+  font-weight: 400;
+  color: var(--text2);
+  cursor: pointer;
+  transition: background var(--transition-fast), color var(--transition-fast);
+  background: transparent;
+  border: none;
+  text-decoration: none;
+  white-space: nowrap;
+  user-select: none;
+}
+.cr-nav__item:hover {
+  background: var(--surface2);
+  color: var(--text);
+}
+.cr-nav__item.is-active {
+  background: var(--surface3);
+  color: var(--text);
+  font-weight: 500;
+}
+body.dark .cr-nav__item.is-active {
+  background: var(--surface3);
+  color: var(--text);
+}
+
+/* ─── Boutons icônes header ─────────────────────────────────────── */
+.cr-icon-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  border: 1px solid var(--border);
+  background: transparent;
+  color: var(--text2);
+  border-radius: 7px;
+  cursor: pointer;
+  transition: background var(--transition-fast), color var(--transition-fast);
+}
+.cr-icon-btn:hover {
+  background: var(--surface2);
+  color: var(--text);
+}
+.cr-icon-btn--text {
+  width: auto;
+  padding: 0 8px;
+  border: none;
+}
+.cr-mobile-menu { display: none; }
+@media (max-width: 768px) {
+  .cr-mobile-menu { display: inline-flex; }
+}
+
+/* ─── Avatar circulaire (logout button) ─────────────────────────── */
+.cr-avatar {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border-radius: 100px;
+  background: var(--accent);
+  color: #fff;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+/* ─── Main pleine largeur ───────────────────────────────────────── */
+.cr-main {
+  padding: 32px 40px 60px;
+  max-width: 1440px;
+  margin: 0 auto;
+}
+@media (max-width: 768px) {
+  .cr-header {
+    padding: 12px 20px;
+  }
+  .cr-main {
+    padding: 24px 20px 40px;
+  }
+  /* Nav cachée sur mobile, ouverte avec le toggle */
+  .cr-header__left .cr-nav {
+    display: none;
+    width: 100%;
+    flex-direction: column;
+    gap: 0;
+    padding-top: 12px;
+    border-top: 1px solid var(--border);
+    margin-top: 12px;
+  }
+  .cr-header--mobile-open .cr-header__left .cr-nav {
+    display: flex;
+  }
+  .cr-header--mobile-open .cr-header__left {
+    width: 100%;
+  }
+  .cr-nav__item {
+    padding: 10px 4px;
+    border-radius: 0;
+  }
 }
 
 /* ═══════════════════════════════════════════════════════════════
@@ -5671,7 +5895,7 @@ body.dark .re-hero-price {
   margin-bottom: 8px;
 }
 .re-hero-price__value {
-  font-family: var(--font-serif, Fraunces, Georgia, serif);
+  font-family: var(--font-serif, 'Geist', 'Inter', sans-serif);
   font-size: 38px;
   font-weight: 600;
   line-height: 1;
