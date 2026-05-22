@@ -5648,3 +5648,132 @@ body.dark .re-block__title--summary:hover {
     padding-right: 12px;
   }
 }
+
+/* ─── Panneau résultats : hero prix + verdict compact ───────────── */
+.re-hero-price {
+  text-align: center;
+  padding: 20px 16px;
+  background: var(--surface-soft, #faf6f0);
+  border: 1px solid var(--border, #e5e0d6);
+  border-radius: 12px;
+  margin-bottom: 16px;
+}
+body.dark .re-hero-price {
+  background: rgba(255, 255, 255, 0.03);
+  border-color: rgba(255, 255, 255, 0.08);
+}
+.re-hero-price__label {
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--text3);
+  margin-bottom: 8px;
+}
+.re-hero-price__value {
+  font-family: var(--font-serif, Fraunces, Georgia, serif);
+  font-size: 38px;
+  font-weight: 600;
+  line-height: 1;
+  color: var(--accent, #6b1a1f);
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.02em;
+}
+body.dark .re-hero-price__value {
+  color: var(--accent, #c44b51);
+}
+@media (max-width: 480px) {
+  .re-hero-price__value { font-size: 30px; }
+}
+
+/* Verdict compact (collapsible) */
+.re-verdict-compact {
+  border: 1px solid var(--border, #e5e0d6);
+  border-radius: 10px;
+  margin-bottom: 16px;
+  overflow: hidden;
+}
+.re-verdict-compact__summary {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  cursor: pointer;
+  padding: 12px 14px;
+  list-style: none;
+  user-select: none;
+}
+.re-verdict-compact__summary::-webkit-details-marker { display: none; }
+.re-verdict-compact__main {
+  flex: 1;
+  min-width: 0;
+}
+.re-verdict-compact__label {
+  font-weight: 600;
+  font-size: 14px;
+  color: var(--text);
+}
+.re-verdict-compact__hint {
+  font-size: 12px;
+  color: var(--text2);
+  margin-top: 2px;
+}
+.re-verdict-compact[open] .re-verdict-details__chevron { transform: rotate(180deg); }
+.re-verdict-compact .re-verdict-details__body { padding: 0 14px 14px; }
+
+/* Couleurs du verdict compact selon la catégorie */
+.re-verdict-compact.re-verdict--excellent { border-left: 4px solid var(--status-green); }
+.re-verdict-compact.re-verdict--good      { border-left: 4px solid var(--status-blue, #4a90e2); }
+.re-verdict-compact.re-verdict--risky     { border-left: 4px solid var(--status-orange, #f59e0b); }
+.re-verdict-compact.re-verdict--bad       { border-left: 4px solid var(--status-red); }
+.re-verdict-compact.re-verdict--unknown   { border-left: 4px solid var(--text3); }
+
+/* Sections collapsibles dans le panneau résultats */
+.re-section-collapsible {
+  border-top: 1px solid var(--border, #e5e0d6);
+  margin-top: 14px;
+  padding-top: 4px;
+}
+.re-section-collapsible__summary {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  cursor: pointer;
+  padding: 10px 0;
+  font-weight: 600;
+  font-size: 13px;
+  color: var(--text2);
+  list-style: none;
+  user-select: none;
+}
+.re-section-collapsible__summary::-webkit-details-marker { display: none; }
+.re-section-collapsible__summary > .re-verdict-details__chevron {
+  margin-left: auto;
+  transition: transform 0.2s ease;
+}
+.re-section-collapsible[open] > .re-section-collapsible__summary .re-verdict-details__chevron {
+  transform: rotate(180deg);
+}
+.re-section-collapsible__body {
+  padding-top: 4px;
+  padding-bottom: 8px;
+}
+
+/* "Voir le détail" inline dans une métrique */
+.re-metric-details {
+  margin-top: 8px;
+}
+.re-metric-details__summary {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  cursor: pointer;
+  font-size: 12px;
+  color: var(--text3);
+  list-style: none;
+  user-select: none;
+}
+.re-metric-details__summary::-webkit-details-marker { display: none; }
+.re-metric-details__summary:hover { color: var(--text2); }
+.re-metric-details[open] .re-metric-details__summary .re-verdict-details__chevron {
+  transform: rotate(180deg);
+}

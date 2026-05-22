@@ -227,6 +227,7 @@ const TRANSLATIONS = {
   re_section_units:      { fr: "Unités locatives",              es: "Unidades de alquiler" },
   re_section_results:    { fr: "Résultats",                     es: "Resultados" },
   re_section_advanced:   { fr: "Paramètres avancés (inoccupation, gestion…)", es: "Parámetros avanzados (vacancia, gestión…)" },
+  re_advanced_metrics:   { fr: "Métriques avancées (DSCR, COC, NOI, stress test…)", es: "Métricas avanzadas (DSCR, COC, NOI, stress test…)" },
   active:                { fr: "actif",                         es: "activo" },
   re_field_name:         { fr: "Nom de l'analyse",              es: "Nombre del análisis" },
   re_field_name_hint:    { fr: "ex: Triplex St-Jean-Baptiste",  es: "ej: Triplex St-Jean-Baptiste" },

@@ -3770,31 +3770,38 @@ function renderRealEstateResults(a) {
   const m = calculateRealEstateMetrics(a);
   const cfClass = m.monthlyCashFlow >= 0 ? "pos" : "neg";
   const stressClass = m.stressMonthlyCashFlow >= 0 ? "pos" : "neg";
-  // Coût pour habiter : positif = ça sort de la poche, négatif = on encaisse même en habitant
   const costClass = m.costToLiveMonthly <= 0 ? "pos" : "neg";
+  const price = Number(a.purchasePrice) || 0;
   return `
     <div class="re-results__sticky">
-      <div class="re-verdict-big re-verdict--${m.verdict}">
-        <div class="re-verdict-big__label">${t("re_verdict_" + m.verdict)}</div>
-        <div class="re-verdict-big__hint">${t("re_hint_" + (m.verdict === "unknown" ? "good" : m.verdict))}</div>
-        <details class="re-verdict-details">
-          <summary class="re-verdict-details__more">
-            <span>${t("re_reasons_summary")}</span>
-            <span class="re-verdict-details__chevron">▾</span>
-          </summary>
-          <div class="re-verdict-details__body">
-            ${getVerdictReasons(a, m).map(r => `
-              <div class="re-reason re-reason--${r.status}">
-                <div class="re-reason__icon">${r.status === 'pass' ? '✓' : r.status === 'warn' ? '!' : '✗'}</div>
-                <div class="re-reason__body">
-                  <div class="re-reason__title">${r.title}</div>
-                  <div class="re-reason__detail">${r.detail}</div>
-                </div>
-              </div>
-            `).join("")}
-          </div>
-        </details>
+
+      <!-- 1. HERO : Prix demandé en TRÈS gros -->
+      <div class="re-hero-price">
+        <div class="re-hero-price__label">${t("re_suggested_asking") || "Prix demandé"}</div>
+        <div class="re-hero-price__value">${fmtMoney(price)}</div>
       </div>
+
+      <!-- 2. Verdict compact + flèche pour détails -->
+      <details class="re-verdict-compact re-verdict--${m.verdict}">
+        <summary class="re-verdict-compact__summary">
+          <div class="re-verdict-compact__main">
+            <div class="re-verdict-compact__label">${t("re_verdict_" + m.verdict)}</div>
+            <div class="re-verdict-compact__hint">${t("re_hint_" + (m.verdict === "unknown" ? "good" : m.verdict))}</div>
+          </div>
+          <span class="re-verdict-details__chevron" aria-label="Voir les raisons">▾</span>
+        </summary>
+        <div class="re-verdict-details__body">
+          ${getVerdictReasons(a, m).map(r => `
+            <div class="re-reason re-reason--${r.status}">
+              <div class="re-reason__icon">${r.status === 'pass' ? '✓' : r.status === 'warn' ? '!' : '✗'}</div>
+              <div class="re-reason__body">
+                <div class="re-reason__title">${r.title}</div>
+                <div class="re-reason__detail">${r.detail}</div>
+              </div>
+            </div>
+          `).join("")}
+        </div>
+      </details>
 
       ${renderSuggestedPriceCard(a)}
 
@@ -3807,6 +3814,7 @@ function renderRealEstateResults(a) {
         </div>
       ` : ""}
 
+      <!-- Cash flow (métrique principale) -->
       <div class="re-metric">
         <div class="re-metric__label">${t("re_metric_cashflow")}${reTip("re_tip_cashflow")}</div>
         <div class="re-metric__value re-metric__value--big re-metric__value--${cfClass}">${fmtMoney(m.monthlyCashFlow)}<span class="re-metric__suffix">${t("re_metric_per_month")}</span></div>
@@ -3814,6 +3822,38 @@ function renderRealEstateResults(a) {
         ${renderCashFlowBreakdown(m, a)}
       </div>
 
+      <!-- Cash requis à l'achat -->
+      <div class="re-metric re-metric--highlight">
+        <div class="re-metric__label">${icon("dollar-sign", 12)} ${t("re_metric_cash_to_close")}${reTip("re_tip_cash_to_close")}</div>
+        <div class="re-metric__value">${fmtMoney(m.cashToClose)}</div>
+        <details class="re-metric-details">
+          <summary class="re-metric-details__summary">${t("re_sim_more_detail") || "Voir le détail"} <span class="re-verdict-details__chevron">▾</span></summary>
+          <div class="re-metric__breakdown">
+            <div><span>${t("re_field_downpayment")}</span><strong>${fmtMoney(m.downPayment)}</strong></div>
+            <div><span>${t("re_field_welcome_tax")}</span><strong>${fmtMoney(m.welcomeTax)}</strong></div>
+            <div><span>${t("re_field_notary")}</span><strong>${fmtMoney(m.notaryFees)}</strong></div>
+            <div><span>${t("re_field_inspection")}</span><strong>${fmtMoney(m.inspectionFees)}</strong></div>
+            ${m.otherClosingFees > 0 ? `<div><span>${t("re_field_other_closing")}</span><strong>${fmtMoney(m.otherClosingFees)}</strong></div>` : ""}
+            ${m.schlPremium > 0 ? `<div><span>${t("re_field_schl")} (au prêt)</span><strong>+${fmtMoney(m.schlPremium)}</strong></div>` : ""}
+          </div>
+        </details>
+      </div>
+
+      <!-- Hypothèque -->
+      <div class="re-metric">
+        <div class="re-metric__label">${t("re_metric_mortgage_pmt")}${reTip("re_tip_mortgage_pmt")}</div>
+        <div class="re-metric__value re-metric__value--big">${fmtMoney(m.monthlyPmt)}<span class="re-metric__suffix">${t("re_metric_per_month")}</span></div>
+        <details class="re-metric-details">
+          <summary class="re-metric-details__summary">${t("re_sim_more_detail") || "Voir le détail"} <span class="re-verdict-details__chevron">▾</span></summary>
+          <div class="re-metric__breakdown">
+            <div><span>${t("re_metric_mortgage_biw")}</span><strong>${fmtMoney(m.biweeklyPmt)}</strong></div>
+            <div><span>${t("re_metric_mortgage_wkl")}</span><strong>${fmtMoney(m.weeklyPmt)}</strong></div>
+          </div>
+          ${renderAmortizationTable(a, m)}
+        </details>
+      </div>
+
+      <!-- Métriques clés (toujours visibles, 2x2) -->
       <div class="re-metric-row">
         <div class="re-metric">
           <div class="re-metric__label">${t("re_metric_cap_rate")}${reTip("re_tip_cap_rate")}</div>
@@ -3825,84 +3865,70 @@ function renderRealEstateResults(a) {
         </div>
       </div>
 
-      <div class="re-metric-row">
-        <div class="re-metric">
-          <div class="re-metric__label">${t("re_metric_dscr")}${reTip("re_tip_dscr")}</div>
-          <div class="re-metric__value ${m.dscr !== null && m.dscr < 1 ? "re-metric__value--neg" : (m.dscr !== null && m.dscr >= 1.2 ? "re-metric__value--pos" : "")}">${m.dscr === null ? "—" : m.dscr.toFixed(2)}</div>
+      <!-- Métriques avancées (collapsibles) -->
+      <details class="re-section-collapsible">
+        <summary class="re-section-collapsible__summary">
+          <span>${t("re_advanced_metrics") || "Métriques avancées"}</span>
+          <span class="re-verdict-details__chevron">▾</span>
+        </summary>
+        <div class="re-section-collapsible__body">
+          <div class="re-metric-row">
+            <div class="re-metric">
+              <div class="re-metric__label">${t("re_metric_dscr")}${reTip("re_tip_dscr")}</div>
+              <div class="re-metric__value ${m.dscr !== null && m.dscr < 1 ? "re-metric__value--neg" : (m.dscr !== null && m.dscr >= 1.2 ? "re-metric__value--pos" : "")}">${m.dscr === null ? "—" : m.dscr.toFixed(2)}</div>
+            </div>
+            <div class="re-metric">
+              <div class="re-metric__label">${t("re_metric_coc")}${reTip("re_tip_coc")}</div>
+              <div class="re-metric__value ${m.cashOnCash !== null && m.cashOnCash < 0 ? "re-metric__value--neg" : (m.cashOnCash !== null && m.cashOnCash >= 5 ? "re-metric__value--pos" : "")}">${m.cashOnCash === null ? "—" : m.cashOnCash.toFixed(2) + "%"}</div>
+            </div>
+          </div>
+          <div class="re-metric-row">
+            <div class="re-metric">
+              <div class="re-metric__label">${t("re_metric_breakeven")}${reTip("re_tip_breakeven")}</div>
+              <div class="re-metric__value ${m.breakEvenOccupancy !== null && m.breakEvenOccupancy > 95 ? "re-metric__value--neg" : (m.breakEvenOccupancy !== null && m.breakEvenOccupancy < 85 ? "re-metric__value--pos" : "")}">${m.breakEvenOccupancy === null ? "—" : m.breakEvenOccupancy.toFixed(1) + "%"}</div>
+            </div>
+            <div class="re-metric">
+              <div class="re-metric__label">${t("re_metric_oer")}${reTip("re_tip_oer")}</div>
+              <div class="re-metric__value ${m.operatingExpenseRatio !== null && m.operatingExpenseRatio > 50 ? "re-metric__value--neg" : (m.operatingExpenseRatio !== null && m.operatingExpenseRatio < 40 ? "re-metric__value--pos" : "")}">${m.operatingExpenseRatio === null ? "—" : m.operatingExpenseRatio.toFixed(1) + "%"}</div>
+            </div>
+          </div>
+          <div class="re-metric">
+            <div class="re-metric__label">${t("re_metric_gross_rent")}${reTip("re_tip_gross_rent")}</div>
+            <div class="re-metric__value">${fmtMoney(m.grossMonthlyRent)}<span class="re-metric__suffix">${t("re_metric_per_month")}</span></div>
+            <div class="re-metric__sub">${fmtMoney(m.grossAnnualRent)}${t("re_metric_per_year")}</div>
+          </div>
+          <div class="re-metric">
+            <div class="re-metric__label">${t("re_metric_noi")}${reTip("re_tip_noi")}</div>
+            <div class="re-metric__value">${fmtMoney(m.noi)}${t("re_metric_per_year")}</div>
+          </div>
+          <div class="re-metric">
+            <div class="re-metric__label">${t("re_metric_total_exp")}${reTip("re_tip_total_exp")}</div>
+            <div class="re-metric__value">${fmtMoney(m.totalOpex)}${t("re_metric_per_year")}</div>
+          </div>
+          <div class="re-metric re-metric--stress">
+            <div class="re-metric__label">${t("re_metric_stress")}${reTip("re_tip_stress")}</div>
+            <div class="re-metric__value re-metric__value--${stressClass}">${fmtMoney(m.stressMonthlyCashFlow)}<span class="re-metric__suffix">${t("re_metric_per_month")}</span></div>
+          </div>
         </div>
-        <div class="re-metric">
-          <div class="re-metric__label">${t("re_metric_coc")}${reTip("re_tip_coc")}</div>
-          <div class="re-metric__value ${m.cashOnCash !== null && m.cashOnCash < 0 ? "re-metric__value--neg" : (m.cashOnCash !== null && m.cashOnCash >= 5 ? "re-metric__value--pos" : "")}">${m.cashOnCash === null ? "—" : m.cashOnCash.toFixed(2) + "%"}</div>
+      </details>
+
+      <!-- Projection long terme (collapsible) -->
+      <details class="re-section-collapsible">
+        <summary class="re-section-collapsible__summary">
+          <span>${t("re_section_projection_results") || "Projection long terme"}</span>
+          <span class="re-verdict-details__chevron">▾</span>
+        </summary>
+        <div class="re-section-collapsible__body">
+          <div id="re-projection">${renderRealEstateProjection(a, reProjectionYears)}</div>
+          <div id="re-projection-chart-wrap" class="re-projection-chart-wrap">
+            <div class="re-projection-chart__title">${t("re_chart_title")}</div>
+            <canvas id="re-projection-chart" height="220"></canvas>
+          </div>
+          ${renderProjectionTable(a, reProjectionYears)}
         </div>
-      </div>
-
-      <div class="re-metric-row">
-        <div class="re-metric">
-          <div class="re-metric__label">${t("re_metric_breakeven")}${reTip("re_tip_breakeven")}</div>
-          <div class="re-metric__value ${m.breakEvenOccupancy !== null && m.breakEvenOccupancy > 95 ? "re-metric__value--neg" : (m.breakEvenOccupancy !== null && m.breakEvenOccupancy < 85 ? "re-metric__value--pos" : "")}">${m.breakEvenOccupancy === null ? "—" : m.breakEvenOccupancy.toFixed(1) + "%"}</div>
-          <div class="re-metric__sub">${t("re_metric_breakeven_sub")}</div>
-        </div>
-        <div class="re-metric">
-          <div class="re-metric__label">${t("re_metric_oer")}${reTip("re_tip_oer")}</div>
-          <div class="re-metric__value ${m.operatingExpenseRatio !== null && m.operatingExpenseRatio > 50 ? "re-metric__value--neg" : (m.operatingExpenseRatio !== null && m.operatingExpenseRatio < 40 ? "re-metric__value--pos" : "")}">${m.operatingExpenseRatio === null ? "—" : m.operatingExpenseRatio.toFixed(1) + "%"}</div>
-          <div class="re-metric__sub">${t("re_metric_oer_sub")}</div>
-        </div>
-      </div>
-
-      <div class="re-metric">
-        <div class="re-metric__label">${t("re_metric_mortgage_pmt")}${reTip("re_tip_mortgage_pmt")}</div>
-        <div class="re-metric__breakdown">
-          <div><span>${t("re_metric_mortgage_monthly")}</span><strong>${fmtMoney(m.monthlyPmt)}</strong></div>
-          <div><span>${t("re_metric_mortgage_biw")}</span><strong>${fmtMoney(m.biweeklyPmt)}</strong></div>
-          <div><span>${t("re_metric_mortgage_wkl")}</span><strong>${fmtMoney(m.weeklyPmt)}</strong></div>
-        </div>
-        ${renderAmortizationTable(a, m)}
-      </div>
-
-      <div class="re-metric">
-        <div class="re-metric__label">${t("re_metric_gross_rent")}${reTip("re_tip_gross_rent")}</div>
-        <div class="re-metric__value">${fmtMoney(m.grossMonthlyRent)}<span class="re-metric__suffix">${t("re_metric_per_month")}</span></div>
-        <div class="re-metric__sub">${fmtMoney(m.grossAnnualRent)}${t("re_metric_per_year")}</div>
-      </div>
-
-      <div class="re-metric">
-        <div class="re-metric__label">${t("re_metric_noi")}${reTip("re_tip_noi")}</div>
-        <div class="re-metric__value">${fmtMoney(m.noi)}${t("re_metric_per_year")}</div>
-      </div>
-
-      <div class="re-metric">
-        <div class="re-metric__label">${t("re_metric_total_exp")}${reTip("re_tip_total_exp")}</div>
-        <div class="re-metric__value">${fmtMoney(m.totalOpex)}${t("re_metric_per_year")}</div>
-      </div>
-
-      <div class="re-metric re-metric--highlight">
-        <div class="re-metric__label">${icon("dollar-sign", 12)} ${t("re_metric_cash_to_close")}${reTip("re_tip_cash_to_close")}</div>
-        <div class="re-metric__value">${fmtMoney(m.cashToClose)}</div>
-        <div class="re-metric__breakdown">
-          <div><span>${t("re_field_downpayment")}</span><strong>${fmtMoney(m.downPayment)}</strong></div>
-          <div><span>${t("re_field_welcome_tax")}</span><strong>${fmtMoney(m.welcomeTax)}</strong></div>
-          <div><span>${t("re_field_notary")}</span><strong>${fmtMoney(m.notaryFees)}</strong></div>
-          <div><span>${t("re_field_inspection")}</span><strong>${fmtMoney(m.inspectionFees)}</strong></div>
-          ${m.otherClosingFees > 0 ? `<div><span>${t("re_field_other_closing")}</span><strong>${fmtMoney(m.otherClosingFees)}</strong></div>` : ""}
-          ${m.schlPremium > 0 ? `<div><span>${t("re_field_schl")} (au prêt)</span><strong>+${fmtMoney(m.schlPremium)}</strong></div>` : ""}
-        </div>
-      </div>
-
-      <div class="re-metric re-metric--stress">
-        <div class="re-metric__label">${t("re_metric_stress")}${reTip("re_tip_stress")}</div>
-        <div class="re-metric__value re-metric__value--${stressClass}">${fmtMoney(m.stressMonthlyCashFlow)}<span class="re-metric__suffix">${t("re_metric_per_month")}</span></div>
-      </div>
-
-      <div id="re-projection">${renderRealEstateProjection(a, reProjectionYears)}</div>
+      </details>
 
       ${a.fiscalEnabled ? renderFiscalImpactCard(a, m, reProjectionYears) : ""}
-
-      <div id="re-projection-chart-wrap" class="re-projection-chart-wrap">
-        <div class="re-projection-chart__title">${t("re_chart_title")}</div>
-        <canvas id="re-projection-chart" height="220"></canvas>
-      </div>
-
-      ${renderProjectionTable(a, reProjectionYears)}
     </div>
   `;
 }
