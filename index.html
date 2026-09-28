@@ -9,8 +9,8 @@
 
   <!-- PWA -->
   <link rel="manifest" href="manifest.json"/>
-  <meta name="theme-color" content="#fafafa" media="(prefers-color-scheme: light)"/>
-  <meta name="theme-color" content="#0b1220" media="(prefers-color-scheme: dark)"/>
+  <meta name="theme-color" content="#F5F3EE" media="(prefers-color-scheme: light)"/>
+  <meta name="theme-color" content="#121412" media="(prefers-color-scheme: dark)"/>
   <meta name="apple-mobile-web-app-capable" content="yes"/>
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent"/>
   <meta name="apple-mobile-web-app-title" content="Mes Finances"/>
@@ -22,10 +22,10 @@
   <link rel="apple-touch-icon" sizes="180x180" href="images/apple-touch-icon.png"/>
   <link rel="apple-touch-icon" sizes="192x192" href="images/icon-192.png"/>
 
-  <!-- Polices (Crystalline : Geist + Geist Mono) -->
+  <!-- Polices : Bricolage Grotesque (titres, montants) + Figtree (interface) -->
   <link rel="preconnect" href="https://fonts.googleapis.com"/>
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
-  <link href="https://fonts.googleapis.com/css2?family=Geist:wght@300..700&family=Geist+Mono:wght@400..600&display=swap" rel="stylesheet"/>
+  <link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,700&family=Figtree:wght@400;500;600&display=swap" rel="stylesheet"/>
 
   <!-- Styles -->
   <link rel="stylesheet" href="css/style.css"/>
@@ -42,33 +42,21 @@
 <div id="login-screen"></div>
 
 <div id="app-shell" style="display:none">
-  <div class="cr-app">
+  <div class="app">
+    <!-- Barre latérale (ordi) / rail (tablette) — remplie par buildSidebar() -->
+    <aside class="app-sidebar" id="sidebar" aria-label="Navigation principale"></aside>
 
-    <!-- HEADER HORIZONTAL (Crystalline) -->
-    <header class="cr-header" id="sidebar" aria-label="Navigation principale">
-      <div class="cr-header__left">
-        <div class="cr-logo">
-          <div class="cr-logo__mark" aria-hidden="true"></div>
-          <span class="cr-logo__text">MesFinances</span>
-        </div>
-        <nav class="cr-nav" id="sidebar-nav" aria-label="Sections"></nav>
-      </div>
-      <div class="cr-header__right">
-        <button class="cr-icon-btn" onclick="toggleDark()" id="dark-btn" aria-label="Mode sombre"></button>
-        <button class="cr-icon-btn" onclick="toggleUILang()" id="lang-btn" aria-label="Langue"></button>
-        <button class="cr-icon-btn cr-icon-btn--text" onclick="logout()" id="logout-btn" aria-label="Déconnexion"></button>
-        <button class="cr-icon-btn cr-mobile-menu" onclick="toggleSidebar()" id="sidebar-toggle-btn" aria-label="Menu"></button>
-      </div>
-    </header>
-
-    <!-- MAIN -->
-    <main class="cr-main" id="main-area">
+    <!-- Contenu -->
+    <main class="app-main" id="main-area">
       <div id="page-content"></div>
     </main>
 
+    <!-- Barre d'onglets (cellulaire) -->
+    <nav class="tabbar" id="tabbar" aria-label="Navigation"></nav>
   </div>
 </div>
 
+<div id="toast-root" aria-live="polite"></div>
 <div id="modals"></div>
 
 <!-- Scripts (ordre critique !) -->
@@ -81,6 +69,7 @@
 <script src="js/centris-parser.js"></script>
 <script src="js/duproprio-parser.js"></script>
 <script src="js/house-page.js"></script>
+<script src="js/quick-add.js"></script>
 <script src="js/sidebar.js"></script>
 <script src="js/auth.js"></script>
 <script src="js/firebase-listeners.js"></script>
@@ -89,9 +78,15 @@
 <script>
   document.documentElement.lang = getUILang() === "es" ? "es" : "fr-CA";
   initDark();
-  document.getElementById("sidebar-toggle-btn").innerHTML = icon("menu", 18);
-  // Le logout-btn est rempli par buildSidebar() (avatar avec initiale)
+  // Raccourcis PWA : ?page=transactions, ?add=expense
+  (function () {
+    const q = new URLSearchParams(location.search);
+    const p = q.get("page");
+    if (p && ["dashboard","transactions","budget","accounts","subscriptions","realestate","house","categories"].includes(p)) activePage = p;
+    window._startQuickAdd = q.get("add");
+  })();
   if (!restoreSession()) showLogin();
+  else if (window._startQuickAdd) setTimeout(() => openQuickAdd(window._startQuickAdd === "income" ? "income" : "expense"), 300);
 
   if ('serviceWorker' in navigator) {
     window.addEventListener('load', () => {

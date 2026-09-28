@@ -21,16 +21,15 @@ function restoreSession() {
 // ── Login ─────────────────────────────────────────────
 function showLogin() {
   document.getElementById("login-screen").innerHTML = `
-  <div style="min-height:100vh;background:linear-gradient(135deg,var(--header-from),var(--accent-soft));display:flex;flex-direction:column;align-items:center;justify-content:center;padding:24px;position:relative">
-    <button onclick="toggleUILang()" style="position:absolute;top:18px;right:18px;background:rgba(255,255,255,.12);border:1px solid rgba(255,255,255,.3);color:#faf6f0;padding:8px 14px;border-radius:var(--radius-pill);font-family:var(--font-body);font-weight:700;cursor:pointer;font-size:13px;letter-spacing:1px;backdrop-filter:blur(6px)">${getUILang().toUpperCase()} → ${getUILang() === "fr" ? "ES" : "FR"}</button>
-    <div style="margin-bottom:28px;text-align:center">
-      <div class="icon-inline" style="justify-content:center;color:var(--yellow);margin-bottom:10px;font-size:0">${icon("wallet", 48)}</div>
-      <div style="font-family:var(--font-heading);font-weight:800;font-size:32px;letter-spacing:4px;color:#faf6f0">MES FINAN<span style="color:var(--yellow);font-style:italic">CES</span></div>
-      <div style="font-family:var(--font-body);font-size:11px;color:rgba(250,246,240,0.6);letter-spacing:2.5px;margin-top:6px;text-transform:uppercase;font-weight:500">${t("login_subtitle")}</div>
+  <main class="login">
+    <button type="button" class="login__lang" onclick="toggleUILang()" aria-label="${escAttr(t("language"))}">${getUILang().toUpperCase()} → ${getUILang() === "fr" ? "ES" : "FR"}</button>
+    <div class="login__brand">
+      <span class="sb-logo__mark" aria-hidden="true">${icon("trending-up", 22)}</span>
+      <span class="sb-logo__text">Mes Finances</span>
     </div>
-    <div style="background:var(--surface);border-radius:var(--radius-xl);padding:28px;width:100%;max-width:320px;box-shadow:var(--shadow-modal)">
-      <h2 style="font-family:var(--font-heading);text-align:center;color:var(--text);font-size:20px;margin-bottom:4px;font-weight:700;letter-spacing:-.3px">${t("login_title")}</h2>
-      <p style="text-align:center;color:var(--text3);font-size:12px;margin-bottom:20px;font-family:var(--font-body)">${t("login_pin_prompt")}</p>
+    <div class="login__card">
+      <h1 class="login__title">${t("login_title")}</h1>
+      <p class="login__hint">${t("login_pin_prompt")}</p>
       <form class="pin-pad" onsubmit="event.preventDefault()" aria-label="PIN">
         <div class="pin-display" role="status" aria-live="polite">
           <div class="pin-dot" id="dot0"></div>
@@ -41,14 +40,14 @@ function showLogin() {
         <div class="pin-error" id="pin-error" role="alert" aria-live="assertive"></div>
         <div class="pin-grid">
           ${[1,2,3,4,5,6,7,8,9].map(n => `<button type="button" class="pin-btn" onclick="pinPress('${n}')" aria-label="${t("digit")} ${n}">${n}</button>`).join("")}
-          <button type="button" class="pin-btn" onclick="pinClear()" style="font-size:11px" aria-label="${t("login_clear")}">${t("login_clear")}</button>
+          <button type="button" class="pin-btn pin-btn--small" onclick="pinClear()" aria-label="${t("login_clear")}">${t("login_clear")}</button>
           <button type="button" class="pin-btn" onclick="pinPress('0')" aria-label="${t("digit")} 0">0</button>
-          <button type="button" class="pin-btn" onclick="pinBackspace()" style="font-size:16px" aria-label="Backspace">⌫</button>
+          <button type="button" class="pin-btn" onclick="pinBackspace()" aria-label="${escAttr(t("erase"))}">${icon("delete", 22)}</button>
         </div>
-        <p style="text-align:center;color:var(--text3);font-size:11px;margin-top:14px;font-family:var(--font-body)">${t("login_keyboard_hint")}</p>
+        <p class="login__kbd">${t("login_keyboard_hint")}</p>
       </form>
     </div>
-  </div>`;
+  </main>`;
   document.getElementById("login-screen").style.display = "block";
   document.getElementById("app-shell").style.display = "none";
   setTimeout(() => {
@@ -74,6 +73,8 @@ function logout() {
   localStorage.removeItem("finances-session"); // compat ancienne clé
   // Vider les arrays de données en mémoire (sinon l'usager suivant voit ceux du précédent un instant)
   accounts = []; transactions = []; categories = []; budgets = []; subscriptions = []; realEstateAnalyses = [];
+  if (typeof closeModal === "function") closeModal();
+  profileMenuOpen = false;
   document.getElementById("app-shell").style.display = "none";
   document.getElementById("login-screen").style.display = "block";
   showLogin();

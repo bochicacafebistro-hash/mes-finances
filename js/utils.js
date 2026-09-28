@@ -9,7 +9,7 @@ function fmtMoney(n) {
     minimumFractionDigits: 2,
     maximumFractionDigits: 2
   });
-  return `${formatted} ${CURRENCY_SYMBOL || "$"}`;
+  return `${formatted}\u00a0${CURRENCY_SYMBOL || "$"}`; // espace insécable avant $
 }
 
 function fmtDate(d) {
@@ -170,8 +170,8 @@ function getCategorySpendThisMonth(categoryId) {
 function getBudgetStatus(spent, limit) {
   if (!limit || limit <= 0) return { pct: 0, status: "none", color: "var(--text3)" };
   const pct = (spent / limit) * 100;
-  if (pct >= 100) return { pct, status: "over", color: "var(--status-red)" };
-  if (pct >= 80)  return { pct, status: "watch", color: "var(--status-orange, #f59e0b)" };
+  if (pct > 100) return { pct, status: "over", color: "var(--status-red)" };
+  if (pct >= 80) return { pct, status: "watch", color: "var(--status-yellow)" };
   return { pct, status: "ok", color: "var(--status-green)" };
 }
 

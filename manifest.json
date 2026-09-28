@@ -6,8 +6,8 @@
   "scope": "/",
   "display": "standalone",
   "orientation": "portrait-primary",
-  "background_color": "#fafafa",
-  "theme_color": "#10b981",
+  "background_color": "#F5F3EE",
+  "theme_color": "#F5F3EE",
   "lang": "fr-CA",
   "dir": "ltr",
   "categories": ["finance", "productivity"],
@@ -17,7 +17,8 @@
     { "src": "images/icon-maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
   ],
   "shortcuts": [
-    { "name": "Transactions", "short_name": "Tx", "url": "/?page=transactions", "icons": [{ "src": "images/icon-192.png", "sizes": "192x192" }] },
+    { "name": "Ajouter une dépense", "short_name": "Dépense", "url": "/?add=expense", "icons": [{ "src": "images/icon-192.png", "sizes": "192x192" }] },
+    { "name": "Activité", "short_name": "Activité", "url": "/?page=transactions", "icons": [{ "src": "images/icon-192.png", "sizes": "192x192" }] },
     { "name": "Comptes", "short_name": "Comptes", "url": "/?page=accounts", "icons": [{ "src": "images/icon-192.png", "sizes": "192x192" }] }
   ]
 }

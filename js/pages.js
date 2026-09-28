@@ -1,494 +1,356 @@
 // ═══════════════════════════════════════════════════════════════
-// PAGE DASHBOARD
+// PAGE « AUJOURD'HUI » (accueil) — REDESIGN-AUJOURDHUI.md §7
 // ═══════════════════════════════════════════════════════════════
 
-function renderDashboard() {
-  const totalBalance = accounts.reduce((s, a) => s + getAccountBalance(a), 0);
-  const startMonth = monthStart(txFilterYear, txFilterMonth);
-  const endMonth = monthEnd(txFilterYear, txFilterMonth);
-  const monthly = getPeriodTotals(startMonth, endMonth);
-  const monthsArr = uiLang === "es" ? MONTHS_ES : MONTHS_FR;
+// Montant arrondi au dollar : « 1 240 $ » (bloc héros)
+function fmtMoney0(n) {
+  return `${Math.round(Number(n || 0)).toLocaleString("fr-CA")}\u00a0${CURRENCY_SYMBOL || "$"}`;
+}
+// Montant sans « ,00 » inutile : « 340 $ », « 118,40 $ »
+function fmtMoneyShort(n) {
+  const v = Number(n || 0);
+  return Math.abs(v - Math.round(v)) < 0.005 ? fmtMoney0(v) : fmtMoney(v);
+}
+function localDateStr(d) {
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+}
+function daysBetween(a, b) { // dates "YYYY-MM-DD", b − a en jours
+  return Math.round((new Date(b + "T12:00:00") - new Date(a + "T12:00:00")) / 86400000);
+}
+// « 1er octobre » / « 3 octobre » (FR) — « 1 de octubre » (ES)
+function fmtDayMonth(d) {
+  const date = new Date(d + "T12:00:00");
+  if (uiLang === "es") return date.toLocaleDateString("es-ES", { day: "numeric", month: "long" });
+  const s = date.toLocaleDateString("fr-CA", { day: "numeric", month: "long" });
+  return date.getDate() === 1 ? s.replace(/^1 /, "1er ") : s;
+}
+function capitalize(s) { return s ? s.charAt(0).toUpperCase() + s.slice(1) : s; }
 
-  // Transactions récentes (6 dernières), groupées par jour
-  const recent = [...transactions]
-    .filter(tx => tx.date)
-    .sort((a, b) => (b.date || "").localeCompare(a.date || ""))
-    .slice(0, 8);
+// Calcul du bloc héros pour le mois sélectionné (§7.2)
+function computeMonthPlan(year, month) {
+  const start = monthStart(year, month), end = monthEnd(year, month);
+  const monthTx = transactions.filter(tx => tx.date && tx.date >= start && tx.date <= end);
+  const income = monthTx.filter(tx => tx.type === "income").reduce((s, tx) => s + Number(tx.amount || 0), 0);
+  const spent = monthTx.filter(tx => tx.type === "expense").reduce((s, tx) => s + Number(tx.amount || 0), 0);
+  const activeBudgets = budgets.filter(b => categories.some(c => c.id === b.categoryId) && Number(b.monthlyLimit) > 0);
+  const budgetTotal = activeBudgets.reduce((s, b) => s + Number(b.monthlyLimit || 0), 0);
+  const planned = activeBudgets.length > 0 ? budgetTotal : income;
+  const remaining = planned - spent;
 
-  // Dépenses par catégorie ce mois
-  const monthExpTx = transactions.filter(tx => tx.type === "expense" && tx.date && tx.date >= startMonth && tx.date <= endMonth);
-  const byCat = {};
-  monthExpTx.forEach(tx => {
-    const cat = categories.find(c => c.id === tx.categoryId);
-    const key = cat ? cat.id : "_none";
-    if (!byCat[key]) byCat[key] = { cat, total: 0 };
-    byCat[key].total += Number(tx.amount || 0);
-  });
-
-  // Statut budget
-  const budgetStatus = computeDashBudgetStatus(byCat);
-
-  // H1 éditorial : message dynamique selon l'équilibre du mois
-  const net = monthly.income - monthly.expense;
-  const heroH1 = computeHeroH1(net);
-
-  // Taux d'épargne (income > 0 ? net/income : 0)
-  const savingsRate = monthly.income > 0 ? net / monthly.income : 0;
-  const monthName = monthsArr[txFilterMonth].toLowerCase();
-
-  let h = `<div class="serene-page">
-
-    <!-- Hero header : greeting + h1 éditorial + segment control -->
-    <div class="serene-hero-header">
-      <div>
-        <div class="kicker" style="margin-bottom:10px">${t("dash_greeting").toUpperCase()} — ${monthsArr[txFilterMonth].toUpperCase()} ${txFilterYear}</div>
-        <h1 class="serene-hero-h1">${heroH1}</h1>
-      </div>
-      <div class="segment-control">
-        <button class="segment-btn" onclick="changeMonth(-1)" aria-label="${t("prev_month")}">←</button>
-        <button class="segment-btn segment-btn--active">${monthsArr[txFilterMonth]} ${txFilterYear}</button>
-        <button class="segment-btn" onclick="changeMonth(1)" aria-label="${t("next_month")}">→</button>
-      </div>
-    </div>
-
-    <!-- KPI grid 4 cols -->
-    <div class="kpi-grid">
-      <div class="kpi-card">
-        <div class="kpi-card__label">${t("dash_total_balance")}</div>
-        <div class="kpi-card__value ${totalBalance < 0 ? 'kpi-card__value--warn' : ''}">${fmtMoney(totalBalance)}</div>
-        <div class="kpi-card__hint">${accounts.length} ${accounts.length > 1 ? "comptes" : "compte"}</div>
-      </div>
-      <div class="kpi-card">
-        <div class="kpi-card__label">${t("dash_month_income")}</div>
-        <div class="kpi-card__value">${fmtMoney(monthly.income)}</div>
-        <div class="kpi-card__hint">${monthly.count > 0 ? monthly.count + " transactions" : "—"}</div>
-      </div>
-      <div class="kpi-card">
-        <div class="kpi-card__label">${t("dash_month_expenses")}</div>
-        <div class="kpi-card__value">${fmtMoney(monthly.expense)}</div>
-        <div class="kpi-card__hint">${monthExpTx.length} ${monthExpTx.length > 1 ? "lignes" : "ligne"}</div>
-      </div>
-      <div class="kpi-card">
-        <div class="kpi-card__label">${t("dash_savings")}</div>
-        <div class="kpi-card__value ${net >= 0 ? 'kpi-card__value--accent' : 'kpi-card__value--warn'}">${(savingsRate * 100).toFixed(0)}%</div>
-        <div class="kpi-card__hint">${net >= 0 ? "+" : ""}${fmtMoney(net)} ${t("dash_net").toLowerCase()}</div>
-      </div>
-    </div>
-
-    <!-- Grille principale : doughnut catégories + budgets du mois -->
-    <div class="dash-main-grid">
-      <!-- Doughnut : répartition catégories -->
-      <div class="serene-card">
-        <div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:16px">
-          <div class="serene-section-title" style="margin-bottom:0">${t("dash_top_categories")}</div>
-          <div class="kicker kicker--small">${monthsArr[txFilterMonth]} ${txFilterYear}</div>
-        </div>
-        <div style="position:relative;height:260px"><canvas id="chart-categories"></canvas></div>
-      </div>
-
-      <!-- Carte budgets du mois -->
-      <div class="serene-card">
-        <div class="serene-section-title">${t("dash_budget_month")}</div>
-        ${renderDashBudgetMini(budgetStatus)}
-      </div>
-    </div>
-
-    <!-- Section abonnements du mois -->
-    ${renderDashSubscriptions()}
-
-    <!-- Bar chart : revenus vs dépenses sur 6 mois -->
-    <div class="serene-card" style="margin-bottom:24px">
-      <div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:16px">
-        <div class="serene-section-title" style="margin-bottom:0">${t("dash_pulse_title")}</div>
-        <div class="kicker kicker--small">6 DERNIERS MOIS</div>
-      </div>
-      <div style="position:relative;height:240px"><canvas id="chart-income-expense"></canvas></div>
-    </div>
-
-    <!-- Line chart : évolution du solde sur 6 mois -->
-    <div class="serene-card" style="margin-bottom:24px">
-      <div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:16px">
-        <div class="serene-section-title" style="margin-bottom:0">Évolution du solde total</div>
-        <div class="kicker kicker--small">6 DERNIERS MOIS</div>
-      </div>
-      <div style="position:relative;height:240px"><canvas id="chart-balance-trend"></canvas></div>
-    </div>
-
-    <!-- Section dernières transactions -->
-    <div class="serene-card" style="margin-bottom:24px">
-      <div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:20px">
-        <div class="serene-section-title" style="margin-bottom:0">${t("dash_last_tx")}</div>
-        <button class="btn-link" onclick="navTo('transactions')">${t("dash_view_tx")} →</button>
-      </div>
-      ${renderSereneRecentTx(recent)}
-    </div>
-
-    <!-- Mes comptes (compact) -->
-    ${accounts.length > 0 ? `
-      <div class="serene-card">
-        <div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:20px">
-          <div class="serene-section-title" style="margin-bottom:0">${t("dash_accounts_overview")}</div>
-          <button class="btn-link" onclick="navTo('accounts')">${t("dash_view_all")} →</button>
-        </div>
-        <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:20px">
-          ${accounts.map(a => {
-            const bal = getAccountBalance(a);
-            return `<div onclick="navTo('accounts')" role="button" tabindex="0" style="cursor:pointer;padding:14px 0;border-top:1px solid var(--border)">
-              <div style="font-family:var(--font-mono);font-size:11px;letter-spacing:0.05em;color:var(--text3);text-transform:uppercase;margin-bottom:6px">${esc(tAccountType(a.type))}</div>
-              <div style="font-family:var(--font-heading);font-size:17px;letter-spacing:-0.01em;margin-bottom:6px">${esc(a.name || "?")}</div>
-              <div style="font-family:var(--font-heading);font-size:24px;letter-spacing:-0.02em;color:${bal >= 0 ? 'var(--text)' : 'var(--status-red)'}">${fmtMoney(bal)}</div>
-            </div>`;
-          }).join("")}
-        </div>
-      </div>
-    ` : `
-      <div class="serene-card" style="text-align:center">
-        <div style="margin-bottom:16px;color:var(--text3);display:flex;justify-content:center">${icon("wallet", 48)}</div>
-        <p style="margin-bottom:20px;color:var(--text2)">${t("dash_no_accounts")}</p>
-        <button class="btn-pill" onclick="navTo('accounts')">${icon("plus", 14)} ${t("acc_add")}</button>
-      </div>
-    `}
-  </div>`;
-  return h;
+  const now = new Date();
+  const daysInMonth = new Date(year, month + 1, 0).getDate();
+  const cmp = (year - now.getFullYear()) * 12 + (month - now.getMonth()); // <0 passé, 0 courant, >0 futur
+  const dayOfMonth = cmp === 0 ? now.getDate() : (cmp < 0 ? daysInMonth : 0);
+  const daysLeft = cmp === 0 ? Math.max(1, daysInMonth - now.getDate() + 1) : (cmp > 0 ? daysInMonth : 1);
+  const perDay = Math.max(remaining, 0) / daysLeft;
+  let status = "on_track";
+  if (remaining < 0) status = "over";
+  else if (planned > 0 && (spent / planned) > (dayOfMonth / daysInMonth) + 0.05) status = "watch";
+  return { income, spent, planned, remaining, perDay, daysLeft, status, when: cmp < 0 ? "past" : cmp > 0 ? "future" : "current", usesBudgets: activeBudgets.length > 0 };
 }
 
-// ── H1 éditorial : "Tu es à l'équilibre", "à 62$ près", etc. ─────
-function computeHeroH1(net) {
-  const abs = Math.abs(net);
-  if (abs < 5) return t("dash_hero_balanced");
-  if (net > 0) return t("dash_hero_ahead", { n: fmtMoney(abs) });
-  return t("dash_hero_short", { n: fmtMoney(abs) });
-}
-
-// ── Mini liste de budgets (pour la carte du dashboard) ──────────
-function renderDashBudgetMini(bs) {
-  if (bs.items.length === 0) {
-    return `<div style="padding:16px 0;color:var(--text3);font-size:14px">
-      <p style="margin-bottom:14px">${t("budget_none")}</p>
-      <button class="btn-pill" onclick="navTo('budget')">${icon("plus", 14)} ${t("budget_set_limit")}</button>
-    </div>`;
-  }
-  return `<ul class="bud-list">
-    ${bs.items.slice(0, 6).map(item => {
-      const overClass = item.status.status === "over" ? "bud-list__amount--over" : "";
-      const fillColor = item.status.status === "over" ? "var(--status-red)" : "var(--accent)";
-      return `<li class="bud-list__item" onclick="openCategoryDetailModal('${item.cat.id}')" role="button" tabindex="0">
-        <div class="bud-list__head">
-          <div class="bud-list__name">${esc(tCategoryName(item.cat))}</div>
-          <span class="bud-list__amount ${overClass}">${fmtMoney(item.spent)} <span class="bud-list__amount-dim">/ ${fmtMoney(item.budget.monthlyLimit)}</span></span>
-        </div>
-        <div class="bud-progress">
-          <div class="bud-progress__fill" style="width:${Math.min(item.status.pct, 100)}%;background:${fillColor}"></div>
-        </div>
-      </li>`;
-    }).join("")}
-  </ul>
-  ${bs.items.length > 6 ? `<div style="margin-top:12px;text-align:center"><button class="btn-link" onclick="navTo('budget')">${t("dash_view_all")} →</button></div>` : ""}`;
-}
-
-// ── Section abonnements du mois (dashboard) ─────────────────────
-function renderDashSubscriptions() {
-  const start = monthStart(txFilterYear, txFilterMonth);
-  const end = monthEnd(txFilterYear, txFilterMonth);
-  const monthsArr = uiLang === "es" ? MONTHS_ES : MONTHS_FR;
-
-  const detected = detectRecurringTransactions();
-  // Filtre par mois courant + exclut les "ignored"
-  const monthSubs = [];
-  detected.forEach(sub => {
-    const monthTxs = sub.transactionIds
-      .map(id => transactions.find(tx => tx.id === id))
-      .filter(tx => tx && tx.date >= start && tx.date <= end);
-    if (monthTxs.length === 0) return;
+// Prochaines dates de prélèvement des abonnements détectés (non ignorés)
+function getUpcomingCharges() {
+  const today = localDateStr(new Date());
+  const out = [];
+  detectRecurringTransactions().forEach(sub => {
     const state = getSubscriptionState(sub.key);
     if (state?.status === "ignored") return;
-    const monthAmount = monthTxs.reduce((s, tx) => s + Number(tx.amount || 0), 0);
-    const lastDate = monthTxs.sort((a,b) => (b.date || "").localeCompare(a.date || ""))[0].date;
-    monthSubs.push({ ...sub, monthAmount, lastDate, isConfirmed: state?.status === "confirmed" });
+    const step = Math.max(1, sub.avgIntervalDays || 30);
+    const d = new Date(sub.lastDate + "T12:00:00");
+    let next = sub.lastDate;
+    let guard = 0;
+    do {
+      if (sub.frequency === "monthly") d.setMonth(d.getMonth() + 1);
+      else d.setDate(d.getDate() + step);
+      next = localDateStr(d);
+    } while (next < today && ++guard < 60);
+    out.push({ ...sub, nextDate: next, inDays: daysBetween(today, next) });
   });
-  monthSubs.sort((a, b) => b.monthAmount - a.monthAmount);
+  return out.sort((a, b) => a.nextDate.localeCompare(b.nextDate));
+}
 
-  const total = monthSubs.reduce((s, sub) => s + sub.monthAmount, 0);
+// Alertes « À regarder » (§7.3), par ordre de priorité
+function computeWatchAlerts(year, month, plan) {
+  const start = monthStart(year, month), end = monthEnd(year, month);
+  const spendByCat = {};
+  transactions.filter(tx => tx.type === "expense" && tx.date >= start && tx.date <= end).forEach(tx => {
+    if (tx.categoryId) spendByCat[tx.categoryId] = (spendByCat[tx.categoryId] || 0) + Number(tx.amount || 0);
+  });
+  const budgetRows = budgets.map(b => {
+    const cat = categories.find(c => c.id === b.categoryId);
+    const limit = Number(b.monthlyLimit || 0);
+    if (!cat || limit <= 0) return null;
+    const spent = spendByCat[b.categoryId] || 0;
+    return { cat, limit, spent, pct: spent / limit * 100 };
+  }).filter(Boolean);
 
-  if (monthSubs.length === 0) {
-    return `<div class="serene-card" style="margin-bottom:24px">
-      <div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:16px">
-        <div class="serene-section-title" style="margin-bottom:0">${t("nav_subscriptions")}</div>
-        <button class="btn-link" onclick="navTo('subscriptions')">${t("dash_view_all")} →</button>
-      </div>
-      <div style="padding:8px 0;color:var(--text3);font-size:14px;text-align:center">${t("sub_not_this_month")}</div>
-    </div>`;
+  const alerts = [];
+  // 1. Budgets dépassés
+  budgetRows.filter(r => r.pct > 100).sort((a, b) => b.pct - a.pct).forEach(r => alerts.push({
+    tone: "red", badge: t("over_budget"), title: tCategoryName(r.cat),
+    detail: t("x_of_y", { a: fmtMoneyShort(r.spent), b: fmtMoneyShort(r.limit) }),
+    action: `openCategoryDetailModal('${r.cat.id}')`
+  }));
+  // 2. Prélèvements dans ≤ 5 jours (mois courant seulement)
+  if (plan.when === "current") {
+    getUpcomingCharges().filter(s => s.inDays >= 0 && s.inDays <= 5).forEach(s => {
+      const acc = accounts.find(a => a.id === s.accountId);
+      alerts.push({
+        tone: "yellow",
+        badge: s.inDays === 0 ? t("today_badge") : s.inDays === 1 ? t("in_1_day") : t("in_n_days", { n: s.inDays }),
+        title: `${esc(s.name)} — ${fmtMoneyShort(s.amount)}`,
+        detail: acc ? t("charged_from", { acc: esc(acc.name), d: fmtDayMonth(s.nextDate) }) : t("charged_on_date", { d: fmtDayMonth(s.nextDate) }),
+        action: `openSubscriptionDetailModal('${s.key}')`
+      });
+    });
   }
+  // 3. Budgets ≥ 80 %
+  budgetRows.filter(r => r.pct >= 80 && r.pct <= 100).sort((a, b) => b.pct - a.pct).forEach(r => alerts.push({
+    tone: "yellow", badge: t("budget_at", { p: Math.round(r.pct) }), title: tCategoryName(r.cat),
+    detail: t("left_of", { a: fmtMoneyShort(Math.max(r.limit - r.spent, 0)), b: fmtMoneyShort(r.limit) }),
+    action: `openCategoryDetailModal('${r.cat.id}')`
+  }));
+  // 4. Transactions sans catégorie
+  const unsorted = transactions.filter(tx => tx.date >= start && tx.date <= end && tx.type !== "transfer" && !tx.categoryId).length;
+  if (unsorted > 0) alerts.push({
+    tone: "green", badge: t("to_sort"), title: unsorted === 1 ? t("n_transaction_one") : t("n_transactions", { n: unsorted }),
+    link: t("sort_in_a_minute"), action: "showUncategorized()"
+  });
+  // 5. Soldes négatifs (sauf cartes de crédit)
+  accounts.filter(a => a.type !== "credit").forEach(a => {
+    const bal = getAccountBalance(a);
+    if (bal < 0) alerts.push({
+      tone: "red", badge: t("negative_balance"), title: `${esc(a.name)} — − ${fmtMoneyShort(Math.abs(bal))}`,
+      detail: t("negative_balance_hint"), action: "navTo('accounts')"
+    });
+  });
+  return alerts.slice(0, 3);
+}
 
-  return `<div class="serene-card" style="margin-bottom:24px">
-    <div style="display:flex;justify-content:space-between;align-items:end;flex-wrap:wrap;gap:12px;margin-bottom:18px">
-      <div>
-        <div class="kicker kicker--small" style="margin-bottom:6px">${t("sub_month_total")} · ${monthsArr[txFilterMonth]} ${txFilterYear}</div>
-        <div class="display-num display-num--md" style="color:var(--accent)">${fmtMoney(total)}</div>
-        <div style="font-size:12px;color:var(--text3);margin-top:6px">${monthSubs.length} prélèvement${monthSubs.length > 1 ? "s" : ""}</div>
-      </div>
-      <button class="btn-link" onclick="navTo('subscriptions')">${t("dash_view_all")} →</button>
-    </div>
-    <ul style="list-style:none;margin:0;padding:0;border-top:1px solid var(--border)">
-      ${monthSubs.slice(0, 8).map(sub => {
-        const cat = categories.find(c => c.id === sub.categoryId);
-        const catColor = cat?.color || "var(--accent)";
-        const freqLabel = t("sub_" + sub.frequency) || sub.frequency;
-        return `<li onclick="openSubscriptionDetailModal('${sub.key}')" role="button" tabindex="0" style="display:grid;grid-template-columns:auto 1fr auto;gap:14px;padding:12px 0;border-bottom:1px solid var(--border);align-items:center;cursor:pointer" onmouseover="this.style.background='var(--surface2)'" onmouseout="this.style.background='transparent'">
-          <div style="width:32px;height:32px;border-radius:100px;background:${catColor}20;color:${catColor};display:flex;align-items:center;justify-content:center;flex-shrink:0">${icon("refresh", 14)}</div>
-          <div style="min-width:0">
-            <div style="font-family:var(--font-heading);font-size:16px;letter-spacing:-0.01em;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(sub.name)}${sub.isConfirmed ? ' <span style="color:var(--accent);font-family:var(--font-mono);font-size:10px;letter-spacing:0.1em">✓</span>' : ""}</div>
-            <div style="font-size:11.5px;color:var(--text3);font-family:var(--font-body)">${cat ? esc(tCategoryName(cat)) : freqLabel} · ${fmtDateShort(sub.lastDate)}</div>
-          </div>
-          <div style="font-family:var(--font-heading);font-size:18px;text-align:right;letter-spacing:-0.01em;flex-shrink:0">${fmtMoney(sub.monthAmount)}</div>
-        </li>`;
-      }).join("")}
-    </ul>
-    ${monthSubs.length > 8 ? `<div style="margin-top:12px;text-align:center"><button class="btn-link" onclick="navTo('subscriptions')">+ ${monthSubs.length - 8} autres →</button></div>` : ""}
+function showUncategorized() {
+  txFilterType = "all"; txFilterAccount = "all"; txSearchQuery = "";
+  txFilterCategory = "_none";
+  navTo("transactions");
+}
+
+function renderMonthPicker() {
+  const monthsArr = uiLang === "es" ? MONTHS_ES : MONTHS_FR;
+  return `<div class="month-pill" role="group" aria-label="${escAttr(monthsArr[txFilterMonth] + " " + txFilterYear)}">
+    <button type="button" class="month-pill__btn" onclick="changeMonth(-1)" aria-label="${escAttr(t("prev_month_aria"))}">${icon("chevron-left", 18)}</button>
+    <span class="month-pill__label" aria-live="polite">${monthsArr[txFilterMonth]} ${txFilterYear}</span>
+    <button type="button" class="month-pill__btn" onclick="changeMonth(1)" aria-label="${escAttr(t("next_month_aria"))}">${icon("chevron-right", 18)}</button>
   </div>`;
 }
 
-// ── Liste des transactions récentes : utilise le même rendu que la page Transactions
-function renderSereneRecentTx(recent) {
-  if (recent.length === 0) {
-    return `<div style="padding:16px 0;color:var(--text3);font-size:14px;text-align:center">${t("dash_no_tx")}</div>`;
-  }
-  // Groupe par date
-  const byDate = {};
-  recent.forEach(tx => {
-    const d = tx.date || "0000-00-00";
-    if (!byDate[d]) byDate[d] = [];
-    byDate[d].push(tx);
-  });
-  const dates = Object.keys(byDate).sort((a, b) => b.localeCompare(a));
+function renderDashboard() {
+  const monthsArr = uiLang === "es" ? MONTHS_ES : MONTHS_FR;
+  const plan = computeMonthPlan(txFilterYear, txFilterMonth);
+  const todayLabel = capitalize(new Date().toLocaleDateString(uiLang === "es" ? "es-ES" : "fr-CA", { weekday: "long", day: "numeric", month: "long" }));
+  const initial = currentUserName ? escAttr(currentUserName.charAt(0).toUpperCase()) : "?";
 
-  let h = `<div class="tx-list-v2">`;
-  dates.forEach(date => {
-    const dayTxs = byDate[date];
-    const dayTotal = dayTxs.reduce((s, tx) => {
-      if (tx.type === "income") return s + Number(tx.amount || 0);
-      if (tx.type === "expense") return s - Number(tx.amount || 0);
-      return s;
-    }, 0);
-    h += `<div class="tx-day-group">
-      <div class="tx-day-header">
-        <span class="tx-day-date">${fmtDateLong(date)}</span>
-        <span class="tx-day-total" style="color:${dayTotal >= 0 ? 'var(--accent)' : 'var(--status-red)'}">${dayTotal >= 0 ? "+" : ""}${fmtMoney(dayTotal)}</span>
+  let h = `<div class="serene-page td-page">
+    <header class="td-head">
+      <div class="td-head__left">
+        <div class="td-date">${todayLabel}</div>
+        <div class="td-hello"><h1 class="td-hello__title">${t("hello")}${currentUserName ? ` ${esc(currentUserName)}` : ""}</h1>
+          <button type="button" class="sb-avatar td-hello__avatar" onclick="openMoreSheet()" aria-label="${escAttr(t("my_profile"))}">${initial}</button></div>
       </div>
-      <div class="tx-day-list">`;
-    dayTxs.forEach(tx => {
-      const cat = categories.find(c => c.id === tx.categoryId);
-      const acc = accounts.find(a => a.id === tx.accountId);
-      const toAcc = accounts.find(a => a.id === tx.toAccountId);
-      const sign = tx.type === "income" ? "+" : tx.type === "expense" ? "−" : "";
-      const color = tx.type === "income" ? "var(--accent)" : tx.type === "expense" ? "var(--text)" : "var(--text2)";
-      const catColor = cat?.color || "var(--text3)";
-      const typeLabel = tx.type === "transfer" ? t("tx_type_transfer") : "";
-      h += `<div class="tx-item" onclick="openTransactionModal('${tx.id}')" role="button" tabindex="0">
-        <div class="tx-item__body">
-          <div class="tx-item__top">
-            <span class="tx-item__desc">${esc(tx.description || tCategoryName(cat) || "—")}</span>
-            <span class="tx-item__amount" style="color:${color}">${sign}${fmtMoney(tx.amount)}</span>
-          </div>
-          <div class="tx-item__bottom">
-            ${cat ? `<span class="tx-pill" style="background:${catColor}15;color:${catColor};border-color:${catColor}40">${esc(tCategoryName(cat))}</span>` : typeLabel ? `<span class="tx-pill" style="background:var(--surface2);color:var(--text2)">${typeLabel}</span>` : ""}
-            <span class="tx-account-name">${tx.type === "transfer" ? `${acc ? esc(acc.name) : "Externe"}${toAcc ? ` → ${esc(toAcc.name)}` : ""}` : esc(acc?.name || "")}</span>
-          </div>
-        </div>
-      </div>`;
-    });
-    h += `</div></div>`;
-  });
-  h += `</div>`;
+      ${renderMonthPicker()}
+    </header>
+
+    <div class="td-grid">
+      <div class="td-main">
+        ${renderTodayHero(plan, monthsArr[txFilterMonth])}
+        ${renderWatchSection(plan)}
+        ${renderRecentActivity()}
+      </div>
+      <aside class="td-side" aria-label="${escAttr(t("this_month"))}">
+        ${renderMonthSummaryCard(plan)}
+        ${renderUpcomingCard()}
+        ${renderAccountsCard()}
+      </aside>
+    </div>
+  </div>`;
   return h;
 }
 
-// ── Pulse chart SVG : aires + lignes pour revenus/dépenses du mois ─
-function renderSerenePulseChartSvg(monthlyTotals, year, month) {
-  // Calcule les totaux jour par jour pour le mois
-  const start = monthStart(year, month);
-  const end = monthEnd(year, month);
-  const startD = new Date(start + "T12:00:00");
-  const endD = new Date(end + "T12:00:00");
-  const days = Math.round((endD - startD) / (1000 * 60 * 60 * 24)) + 1;
-
-  const incByDay = new Array(days).fill(0);
-  const expByDay = new Array(days).fill(0);
-
-  transactions
-    .filter(tx => tx.date && tx.date >= start && tx.date <= end)
-    .forEach(tx => {
-      const dayIdx = Math.round((new Date(tx.date + "T12:00:00") - startD) / (1000 * 60 * 60 * 24));
-      if (dayIdx < 0 || dayIdx >= days) return;
-      const amt = Number(tx.amount || 0);
-      if (tx.type === "income") incByDay[dayIdx] += amt;
-      else if (tx.type === "expense") expByDay[dayIdx] += amt;
-    });
-
-  const w = 720, h = 200, pad = 12;
-  const max = Math.max(1, ...incByDay, ...expByDay);
-
-  const toLine = (pts) => pts.map((v, i) => {
-    const x = pad + (i / Math.max(1, days - 1)) * (w - pad * 2);
-    const y = h - pad - (v / max) * (h - pad * 2);
-    return `${i === 0 ? "M" : "L"}${x.toFixed(1)},${y.toFixed(1)}`;
-  }).join(" ");
-
-  const toArea = (pts) => {
-    const base = h - pad;
-    const line = toLine(pts);
-    return `${line} L${w - pad},${base} L${pad},${base} Z`;
-  };
-
-  return `<svg viewBox="0 0 ${w} ${h}" class="pulse-chart" preserveAspectRatio="xMidYMid meet">
-    <defs>
-      <linearGradient id="incgrad" x1="0" y1="0" x2="0" y2="1">
-        <stop offset="0" stop-color="var(--accent)" stop-opacity="0.18"/>
-        <stop offset="1" stop-color="var(--accent)" stop-opacity="0"/>
-      </linearGradient>
-      <linearGradient id="expgrad" x1="0" y1="0" x2="0" y2="1">
-        <stop offset="0" stop-color="var(--status-red)" stop-opacity="0.14"/>
-        <stop offset="1" stop-color="var(--status-red)" stop-opacity="0"/>
-      </linearGradient>
-    </defs>
-    <path d="${toArea(incByDay)}" fill="url(#incgrad)"/>
-    <path d="${toArea(expByDay)}" fill="url(#expgrad)"/>
-    <path d="${toLine(incByDay)}" fill="none" stroke="var(--accent)" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>
-    <path d="${toLine(expByDay)}" fill="none" stroke="var(--status-red)" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>
-  </svg>`;
-}
-
-// ── Section Budget sur le dashboard ──────────────────
-function computeDashBudgetStatus(byCat) {
-  const items = [];
-  let totalLimit = 0, totalSpent = 0;
-  let over = 0, watch = 0;
-  budgets.forEach(b => {
-    const cat = categories.find(c => c.id === b.categoryId);
-    if (!cat) return;
-    const spent = byCat[b.categoryId]?.total || 0;
-    const status = getBudgetStatus(spent, b.monthlyLimit);
-    if (status.status === "over") over++;
-    else if (status.status === "watch") watch++;
-    totalLimit += Number(b.monthlyLimit || 0);
-    totalSpent += spent;
-    items.push({ cat, budget: b, spent, status });
-  });
-  // Tri : dépassements en premier, puis par % décroissant
-  items.sort((a, b) => b.status.pct - a.status.pct);
-  return { items, totalLimit, totalSpent, over, watch };
-}
-
-function renderDashBudget(bs) {
-  if (bs.items.length === 0) {
-    return `<div class="dash-card" style="margin-bottom:16px;border:1px dashed var(--border-strong)">
-      <div style="display:flex;align-items:center;gap:12px">
-        <div style="color:var(--accent)">${icon("trending-up", 24)}</div>
-        <div style="flex:1">
-          <div style="font-weight:600;font-family:var(--font-heading)">${t("budget_summary")}</div>
-          <div style="font-size:13px;color:var(--text3);margin-top:2px">${t("budget_none")}</div>
-        </div>
-        <button class="btn btn-primary" onclick="navTo('budget')">${icon("plus", 14)} ${t("budget_set_limit")}</button>
-      </div>
-    </div>`;
+function renderTodayHero(p, monthName) {
+  // État vide : aucun revenu ni budget
+  if (p.planned <= 0 && p.spent <= 0) {
+    return `<section class="td-hero td-hero--empty">
+      <div class="td-hero__label">${t("left_to_spend")}</div>
+      <h2 class="td-hero__empty-title">${t("empty_hero_title")}</h2>
+      <p class="td-hero__empty-hint">${t("empty_hero_hint")}</p>
+      <button type="button" class="td-hero__btn" onclick="openQuickAdd('income')">${icon("plus", 18)} ${t("add_income")}</button>
+    </section>`;
   }
-  const remaining = bs.totalLimit - bs.totalSpent;
-  const overallStatus = getBudgetStatus(bs.totalSpent, bs.totalLimit);
-  return `<div class="dash-card" style="margin-bottom:16px">
-    <div class="dash-card__head">
-      <h3 class="dash-card__title">${icon("trending-up", 16)} ${t("budget_summary")}</h3>
-      <button class="btn-icon-only" onclick="navTo('budget')" aria-label="${t("dash_view_all")}">${icon("arrow-right", 14)}</button>
+  const pct = p.planned > 0 ? Math.min(p.spent / p.planned, 1) * 100 : 100;
+  const statusLabel = p.status === "over" ? t("over_budget") : p.status === "watch" ? t("watch_pace") : t("on_track");
+  const over = p.remaining < 0;
+  const progress = `
+    <div class="td-hero__bar" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="${Math.round(pct)}" aria-label="${escAttr(t("spent_of_planned", { a: fmtMoney0(p.spent), b: fmtMoney0(p.planned) }))}">
+      <div class="td-hero__fill" style="width:${pct.toFixed(1)}%"></div>
     </div>
-    <div class="budget-overview">
-      <div class="budget-overview__stat">
-        <div class="budget-overview__label">${t("budget_total_spent")}</div>
-        <div class="budget-overview__value" style="color:${overallStatus.color}">${fmtMoney(bs.totalSpent)}</div>
-        <div class="budget-overview__sublabel">/ ${fmtMoney(bs.totalLimit)}</div>
-      </div>
-      <div class="budget-overview__stat">
-        <div class="budget-overview__label">${remaining >= 0 ? t("budget_remaining") : t("budget_exceeded")}</div>
-        <div class="budget-overview__value" style="color:${remaining >= 0 ? 'var(--status-green)' : 'var(--status-red)'}">${fmtMoney(Math.abs(remaining))}</div>
-        <div class="budget-overview__sublabel">${bs.over > 0 ? `${bs.over} ${t("budget_warnings")}` : bs.watch > 0 ? `${bs.watch} ${t("budget_watch")}` : t("budget_ok")}</div>
-      </div>
-    </div>
-    <div class="budget-progress" style="margin-top:8px">
-      <div class="budget-progress__bar">
-        <div class="budget-progress__fill" style="width:${Math.min(overallStatus.pct, 100)}%;background:${overallStatus.color}"></div>
-      </div>
-    </div>
-    <div class="budget-list-mini">
-      ${bs.items.slice(0, 5).map(item => `
-        <div class="budget-mini-row" onclick="openCategoryDetailModal('${item.cat.id}')" role="button" tabindex="0">
-          <div class="budget-mini-row__head">
-            <span class="budget-mini-row__name" style="color:${item.cat.color || 'var(--text3)'}">${tCategoryName(item.cat)}</span>
-            <span class="budget-mini-row__amount">${fmtMoney(item.spent)} / ${fmtMoney(item.budget.monthlyLimit)}</span>
-          </div>
-          <div class="budget-progress__bar" style="height:6px">
-            <div class="budget-progress__fill" style="width:${Math.min(item.status.pct, 100)}%;background:${item.status.color}"></div>
-          </div>
+    <div class="td-hero__foot">
+      <span>${t("spent_of_planned", { a: fmtMoney0(p.spent), b: fmtMoney0(p.planned) })}</span>
+      ${p.when === "current" ? `<span class="td-hero__status">${statusLabel}</span>` : ""}
+    </div>`;
+
+  if (p.when === "past") {
+    return `<section class="td-hero ${over ? "td-hero--over" : ""}">
+      <div class="td-hero__row">
+        <div>
+          <div class="td-hero__label">${over ? t("past_over") : t("past_left")}</div>
+          <div class="td-hero__amount">${fmtMoney0(Math.abs(p.remaining))}</div>
         </div>
-      `).join("")}
+        <div class="td-hero__side">${t("past_spent", { x: `<strong>${fmtMoney0(p.spent)}</strong>`, m: monthName.toLowerCase() })}</div>
+      </div>
+      ${progress}
+    </section>`;
+  }
+
+  const days = p.daysLeft;
+  return `<section class="td-hero ${over ? "td-hero--over" : ""}">
+    <div class="td-hero__row">
+      <div>
+        <div class="td-hero__label">${over ? t("over_by", { x: fmtMoney0(-p.remaining) }) : (p.when === "future" ? t("future_month") : t("left_to_spend"))}</div>
+        <div class="td-hero__amount">${over ? "− " : ""}${fmtMoney0(Math.abs(p.remaining))}</div>
+      </div>
+      ${!over ? `<div class="td-hero__side">${t("per_day", { x: `<strong>${fmtMoney0(p.perDay)}</strong>` })}<br/>${days === 1 ? t("for_last_day") : t("for_last_days", { n: days })}</div>` : ""}
     </div>
-  </div>`;
+    ${progress}
+  </section>`;
 }
 
-function renderDashRecentTx(recent) {
+function renderWatchSection(plan) {
+  const alerts = computeWatchAlerts(txFilterYear, txFilterMonth, plan);
+  const title = `<h2 class="td-section__title">${t("to_watch")}</h2>`;
+  if (alerts.length === 0) {
+    return `<section class="td-section">${title}
+      <div class="td-calm">${icon("check-circle", 20)}<span>${t("all_good")}</span></div>
+    </section>`;
+  }
+  return `<section class="td-section">${title}
+    <div class="td-watch">
+      ${alerts.map(a => `<button type="button" class="td-watch__card" onclick="${a.action}">
+        <span class="pill pill--${a.tone}">${a.badge}</span>
+        <span class="td-watch__title">${a.title}</span>
+        ${a.detail ? `<span class="td-watch__detail">${a.detail}</span>` : ""}
+        ${a.link ? `<span class="td-watch__link">${a.link}</span>` : ""}
+      </button>`).join("")}
+    </div>
+  </section>`;
+}
+
+// Libellé de groupe de jours : AUJOURD'HUI / HIER / LUN. 21 SEPT.
+function dayGroupLabel(d) {
+  const today = localDateStr(new Date());
+  const diff = daysBetween(d, today);
+  if (diff === 0) return t("today");
+  if (diff === 1) return t("yesterday");
+  const date = new Date(d + "T12:00:00");
+  return date.toLocaleDateString(uiLang === "es" ? "es-ES" : "fr-CA", { weekday: "short", day: "numeric", month: "short" });
+}
+
+// Ligne de transaction (accueil + Activité)
+function renderTxRow(tx) {
+  const cat = categories.find(c => c.id === tx.categoryId);
+  const acc = accounts.find(a => a.id === tx.accountId);
+  const toAcc = accounts.find(a => a.id === tx.toAccountId);
+  const name = tx.description || (cat ? tCategoryName(cat) : "—");
+  let meta;
+  if (tx.type === "transfer") meta = `${t("tx_type_transfer")} · ${acc ? esc(acc.name) : "—"}${toAcc ? ` → ${esc(toAcc.name)}` : ""}`;
+  else meta = `${cat ? esc(tCategoryName(cat)) : `<span class="td-unsorted">${t("uncategorized")}</span>`}${acc ? ` · ${esc(acc.name)}` : ""}`;
+  const badge = tx.type === "transfer" ? icon("arrow-left-right", 18)
+    : cat ? icon(cat.icon || "folder", 18)
+    : `<span class="tx-row__initial">${esc((name || "?").trim().charAt(0).toUpperCase())}</span>`;
+  const amtClass = tx.type === "income" ? "tx-row__amount--in" : tx.type === "transfer" ? "tx-row__amount--move" : "";
+  return `<button type="button" class="tx-row" onclick="openTransactionModal('${tx.id}')">
+    <span class="tx-row__badge" aria-hidden="true">${badge}</span>
+    <span class="tx-row__body">
+      <span class="tx-row__name">${esc(name)}</span>
+      <span class="tx-row__meta">${meta}</span>
+    </span>
+    <span class="tx-row__amount ${amtClass}">${fmtSignedAmount(tx)}</span>
+  </button>`;
+}
+
+function renderTxGroups(list) {
+  const byDate = {};
+  list.forEach(tx => { (byDate[tx.date] = byDate[tx.date] || []).push(tx); });
+  return Object.keys(byDate).sort((a, b) => b.localeCompare(a)).map(d => `
+    <div class="tx-group">
+      <div class="tx-group__label">${dayGroupLabel(d)}</div>
+      ${byDate[d].map(renderTxRow).join("")}
+    </div>`).join("");
+}
+
+function renderRecentActivity() {
+  const start = monthStart(txFilterYear, txFilterMonth), end = monthEnd(txFilterYear, txFilterMonth);
+  const recent = transactions.filter(tx => tx.date && tx.date >= start && tx.date <= end)
+    .sort((a, b) => (b.date || "").localeCompare(a.date || "") || String(b.createdAt || "").localeCompare(String(a.createdAt || "")))
+    .slice(0, 6);
+  const head = `<div class="td-section__head">
+      <h2 class="td-section__title">${t("recent_activity")}</h2>
+      <button type="button" class="link-btn" onclick="navTo('transactions')">${t("see_all")}</button>
+    </div>`;
   if (recent.length === 0) {
-    return `<div class="dash-card">
-      <div class="dash-card__head"><h3 class="dash-card__title">${icon("clipboard", 16)} ${t("dash_recent_tx")}</h3></div>
-      <div class="dash-empty">${t("dash_no_tx")}</div>
-    </div>`;
+    return `<section class="td-section">${head}
+      <div class="card td-empty">
+        <p>${t("no_tx_this_month")}</p>
+        <button type="button" class="btn-ink" onclick="openQuickAdd('expense')">${icon("plus", 18)} ${t("add_expense")}</button>
+      </div>
+    </section>`;
   }
-  return `<div class="dash-card">
-    <div class="dash-card__head">
-      <h3 class="dash-card__title">${icon("clipboard", 16)} ${t("dash_recent_tx")}</h3>
-      <button class="btn-icon-only" onclick="navTo('transactions')" aria-label="${t("dash_view_all")}">${icon("arrow-right", 14)}</button>
-    </div>
-    <ul class="dash-list">
-      ${recent.map(tx => {
-        const cat = categories.find(c => c.id === tx.categoryId);
-        const acc = accounts.find(a => a.id === tx.accountId);
-        const sign = tx.type === "income" ? "+" : tx.type === "expense" ? "-" : "";
-        const color = tx.type === "income" ? "var(--status-green)" : tx.type === "expense" ? "var(--status-red)" : "var(--text2)";
-        return `<li class="dash-list__item dash-list__item--clickable" onclick="openTransactionModal('${tx.id}')" role="button" tabindex="0" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();openTransactionModal('${tx.id}')}">
-          <span class="dash-list__name">
-            ${esc(tx.description || tCategoryName(cat) || "?")}<br/>
-            <small style="color:var(--text3);font-size:10px">${fmtDateShort(tx.date)} · ${esc(acc?.name || "")}</small>
-          </span>
-          <span class="dash-list__value" style="color:${color};font-weight:700">${sign}${fmtMoney(tx.amount)}</span>
-        </li>`;
-      }).join("")}
-    </ul>
-  </div>`;
+  return `<section class="td-section">${head}<div class="card tx-card">${renderTxGroups(recent)}</div></section>`;
 }
 
-function renderDashTopCategories(topCats) {
-  if (topCats.length === 0) {
-    return `<div class="dash-card">
-      <div class="dash-card__head"><h3 class="dash-card__title">${icon("pie-chart", 16)} ${t("dash_top_categories")}</h3></div>
-      <div class="dash-empty">${t("dash_no_tx")}</div>
-    </div>`;
+function renderMonthSummaryCard(p) {
+  const saved = p.income - p.spent;
+  const monthsArr = uiLang === "es" ? MONTHS_ES : MONTHS_FR;
+  const title = p.when === "current" ? t("this_month") : `${monthsArr[txFilterMonth]} ${txFilterYear}`;
+  const rate = p.income > 0 ? Math.round(saved / p.income * 100) : null;
+  return `<section class="card side-card">
+    <h2 class="side-card__title">${title}</h2>
+    <div class="kv"><span>${t("money_in")}</span><span class="kv__v kv__v--in">+ ${fmtMoney(p.income)}</span></div>
+    <div class="kv"><span>${t("money_out")}</span><span class="kv__v">− ${fmtMoney(p.spent)}</span></div>
+    <div class="kv kv--total"><span>${t("saved")}</span><span class="kv__v ${saved < 0 ? "kv__v--neg" : ""}">${saved < 0 ? "− " : ""}${fmtMoney0(Math.abs(saved))}${rate !== null ? ` · ${rate} %` : ""}</span></div>
+  </section>`;
+}
+
+function renderUpcomingCard() {
+  const today = localDateStr(new Date());
+  const up = getUpcomingCharges().filter(s => s.nextDate >= today).slice(0, 3);
+  return `<section class="card side-card">
+    <h2 class="side-card__title">${t("upcoming_charges")}</h2>
+    ${up.length === 0 ? `<p class="side-card__empty">${t("no_upcoming")}</p>` : up.map(s => `
+      <button type="button" class="kv kv--btn" onclick="openSubscriptionDetailModal('${s.key}')">
+        <span class="kv__main"><span class="kv__name">${esc(s.name)}</span><span class="kv__sub">${fmtDateShort(s.nextDate)}</span></span>
+        <span class="kv__v">${fmtMoneyShort(s.amount)}</span>
+      </button>`).join("")}
+    <button type="button" class="link-btn side-card__link" onclick="navTo('subscriptions')">${t("manage_subscriptions")}</button>
+  </section>`;
+}
+
+function renderAccountsCard() {
+  if (accounts.length === 0) {
+    return `<section class="card side-card">
+      <h2 class="side-card__title">${t("my_accounts")}</h2>
+      <p class="side-card__empty">${t("dash_no_accounts")}</p>
+      <button type="button" class="link-btn side-card__link" onclick="openAccountModal()">${t("acc_modal_add")}</button>
+    </section>`;
   }
-  const total = topCats.reduce((s, c) => s + c.total, 0);
-  return `<div class="dash-card">
-    <div class="dash-card__head"><h3 class="dash-card__title">${icon("pie-chart", 16)} ${t("dash_top_categories")}</h3></div>
-    <ul class="dash-list">
-      ${topCats.map(c => {
-        const pct = total > 0 ? (c.total / total * 100).toFixed(0) : 0;
-        const color = c.cat?.color || "var(--text3)";
-        const name = c.cat ? tCategoryName(c.cat) : "—";
-        const catId = c.cat?.id || "";
-        return `<li class="dash-list__item dash-list__item--clickable" onclick="openCategoryDetailModal('${catId}')" role="button" tabindex="0" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();openCategoryDetailModal('${catId}')}">
-          <span class="dash-list__name icon-inline">
-            <span style="color:${color}">${icon(c.cat?.icon || "folder", 14)}</span>
-            ${esc(name)}<br/>
-            <small style="color:var(--text3);font-size:10px;margin-left:20px">${pct}% · ${t("cat_detail_tx_count", { n: c.count || transactions.filter(tx => tx.type==='expense' && tx.categoryId === catId && tx.date >= monthStart(txFilterYear, txFilterMonth) && tx.date <= monthEnd(txFilterYear, txFilterMonth)).length, s: '' }).replace('{s}', '')}</small>
-          </span>
-          <span class="dash-list__value" style="color:var(--status-red);font-weight:700">${fmtMoney(c.total)} ${icon("chevron-right", 12)}</span>
-        </li>`;
-      }).join("")}
-    </ul>
-  </div>`;
+  return `<section class="card side-card">
+    <h2 class="side-card__title">${t("my_accounts")}</h2>
+    ${accounts.map(a => {
+      const bal = getAccountBalance(a);
+      return `<button type="button" class="kv kv--btn" onclick="navTo('accounts')">
+        <span class="kv__main"><span class="kv__dot" style="background:${escAttr(a.color || "var(--accent)")}" aria-hidden="true"></span><span class="kv__name">${esc(a.name || "?")}</span></span>
+        <span class="kv__v ${bal < 0 ? "kv__v--neg" : ""}">${bal < 0 ? "− " : ""}${fmtMoney(Math.abs(bal))}</span>
+      </button>`;
+    }).join("")}
+  </section>`;
 }
 
 // ═══════════════════════════════════════════════════════════════
@@ -497,52 +359,47 @@ function renderDashTopCategories(topCats) {
 
 function renderAccounts() {
   let h = `<div class="serene-page">
-    <div class="serene-hero-header">
+    <header class="page-head">
       <div>
-        <div class="kicker" style="margin-bottom:10px">${t("acc_subtitle").toUpperCase()}</div>
-        <h1 class="serene-hero-h1" style="margin:0">${t("acc_title")}</h1>
+        <h1 class="page-title">${t("acc_title")}</h1>
+        ${accounts.length > 0 ? (() => {
+          const total = accounts.reduce((s, a) => s + getAccountBalance(a), 0);
+          return `<p class="page-sub">${t("dash_total_balance")} : <strong class="${total < 0 ? "neg" : ""}">${total < 0 ? "− " : ""}${fmtMoney(Math.abs(total))}</strong></p>`;
+        })() : ""}
       </div>
-      <button class="btn-pill" onclick="openAccountModal()">${icon("plus", 14)} ${t("acc_add")}</button>
-    </div>`;
+      <button type="button" class="btn-ink" onclick="openAccountModal()">${icon("plus", 18)} ${t("acc_modal_add")}</button>
+    </header>`;
 
   if (accounts.length === 0) {
-    h += `<div class="serene-card" style="text-align:center">
-      <div style="margin-bottom:16px;color:var(--text3);display:flex;justify-content:center">${icon("wallet", 48)}</div>
-      <p style="color:var(--text2)">${t("acc_no_accounts")}</p>
+    h += `<div class="card td-empty">
+      <p>${t("acc_no_accounts")}</p>
+      <button type="button" class="btn-ink" onclick="openAccountModal()">${icon("plus", 18)} ${t("acc_modal_add")}</button>
     </div>`;
-  } else {
-    const total = accounts.reduce((s, a) => s + getAccountBalance(a), 0);
-    h += `<div class="serene-card serene-card--lg" style="margin-bottom:24px">
-      <div class="kicker kicker--small" style="margin-bottom:6px">${t("dash_total_balance")}</div>
-      <div class="display-num display-num--lg" style="color:${total >= 0 ? 'var(--text)' : 'var(--status-red)'}">${fmtMoney(total)}</div>
-      <div style="font-size:12px;color:var(--text3);margin-top:6px">${accounts.length} ${accounts.length > 1 ? "comptes" : "compte"}</div>
-    </div>`;
-
-    h += `<div class="card-grid">`;
-    accounts.forEach(a => {
-      const bal = getAccountBalance(a);
-      const txCount = transactions.filter(tx => tx.accountId === a.id || tx.toAccountId === a.id).length;
-      h += `<div class="account-card" style="border-left:5px solid ${a.color || 'var(--accent)'}">
-        <div class="account-card__head">
-          <div style="flex:1;min-width:0">
-            <h3 class="account-card__name">${esc(a.name || "?")}</h3>
-            <div class="account-card__type icon-inline">${icon(ACCOUNT_TYPES.find(at => at.value === a.type)?.icon || "folder", 12)} ${tAccountType(a.type)}</div>
-          </div>
-          <div class="account-card__actions">
-            <button class="action-btn" onclick="openAccountModal('${a.id}')" title="${t("edit")}" aria-label="${t("edit")}">${icon("pencil", 14)}</button>
-            <button class="action-btn action-btn--danger" onclick="askDelete('accounts','${a.id}','${esc(a.name)}')" title="${t("delete")}" aria-label="${t("delete")}">${icon("trash", 14)}</button>
-          </div>
-        </div>
-        <div class="account-card__balance" style="color:${bal >= 0 ? 'var(--text)' : 'var(--status-red)'}">${fmtMoney(bal)}</div>
-        <div class="account-card__meta">
-          <span>${t("acc_initial_balance")} : ${fmtMoney(a.initialBalance || 0)}</span>
-          <span>${txCount} tx</span>
-        </div>
-        ${a.notes ? `<div class="account-card__notes">${esc(a.notes)}</div>` : ""}
-      </div>`;
-    });
-    h += `</div>`;
+    return h + `</div>`;
   }
+
+  h += `<div class="acc-grid">`;
+  accounts.forEach(a => {
+    const bal = getAccountBalance(a);
+    const txCount = transactions.filter(tx => tx.accountId === a.id || tx.toAccountId === a.id).length;
+    h += `<article class="card acc-card">
+      <div class="acc-card__head">
+        <span class="acc-card__dot" style="background:${escAttr(a.color || "var(--accent)")}" aria-hidden="true"></span>
+        <div class="acc-card__id">
+          <h2 class="acc-card__name">${esc(a.name || "?")}</h2>
+          <div class="acc-card__type">${tAccountType(a.type)}</div>
+        </div>
+        <div class="acc-card__actions">
+          <button type="button" class="icon-btn-round icon-btn-round--sm" onclick="openAccountModal('${a.id}')" aria-label="${escAttr(t("edit"))} — ${escAttr(a.name)}" title="${escAttr(t("edit"))}">${icon("pencil", 16)}</button>
+          <button type="button" class="icon-btn-round icon-btn-round--sm icon-btn-round--danger" onclick="askDelete('accounts','${a.id}','${esc(a.name)}')" aria-label="${escAttr(t("delete"))} — ${escAttr(a.name)}" title="${escAttr(t("delete"))}">${icon("trash", 16)}</button>
+        </div>
+      </div>
+      <div class="acc-card__balance ${bal < 0 ? "neg" : ""}">${bal < 0 ? "− " : ""}${fmtMoney(Math.abs(bal))}</div>
+      <div class="acc-card__meta">${t("acc_initial_balance")} : ${fmtMoney(a.initialBalance || 0)} · ${txCount} tx</div>
+      ${a.notes ? `<div class="acc-card__notes">${esc(a.notes)}</div>` : ""}
+    </article>`;
+  });
+  h += `</div>`;
   return h + `</div>`;
 }
 
@@ -604,7 +461,8 @@ function renderTransactions() {
 
   let filtered = transactions.filter(tx => tx.date && tx.date >= startMonth && tx.date <= endMonth);
   if (txFilterAccount !== "all") filtered = filtered.filter(tx => tx.accountId === txFilterAccount || tx.toAccountId === txFilterAccount);
-  if (txFilterCategory !== "all") filtered = filtered.filter(tx => tx.categoryId === txFilterCategory);
+  if (txFilterCategory === "_none") filtered = filtered.filter(tx => tx.type !== "transfer" && !tx.categoryId);
+  else if (txFilterCategory !== "all") filtered = filtered.filter(tx => tx.categoryId === txFilterCategory);
   if (txFilterType !== "all") filtered = filtered.filter(tx => tx.type === txFilterType);
   if (txSearchQuery) {
     const q = txSearchQuery.toLowerCase();
@@ -616,147 +474,96 @@ function renderTransactions() {
   filtered.sort((a, b) => (b.date || "").localeCompare(a.date || ""));
 
   const totals = getPeriodTotals(startMonth, endMonth);
-  const monthsArr = uiLang === "es" ? MONTHS_ES : MONTHS_FR;
+  // Pastilles de filtre : Tout · Dépenses · Revenus · Virements · Sans catégorie
+  const chip = (key, label, active) => `<button type="button" class="filter-chip ${active ? "is-on" : ""}" aria-pressed="${active}" onclick="setTxQuickFilter('${key}')">${label}</button>`;
+  const isNone = txFilterCategory === "_none";
+  const catActive = txFilterCategory !== "all" && !isNone;
 
   let h = `<div class="serene-page">
-    <div class="serene-hero-header">
+    <header class="page-head">
       <div>
-        <div class="kicker" style="margin-bottom:10px">${monthsArr[txFilterMonth].toUpperCase()} ${txFilterYear}</div>
-        <h1 class="serene-hero-h1" style="margin:0">${t("tx_title")}</h1>
+        <h1 class="page-title">${t("nav_activity")}</h1>
+        <p class="page-sub">${t("month_line", { a: fmtMoney(totals.income), b: fmtMoney(totals.expense) })}</p>
       </div>
-      <button class="btn-pill" onclick="openTransactionModal()">${icon("plus", 14)} ${t("tx_add")}</button>
-    </div>
+      <div class="page-head__actions">
+        ${renderMonthPicker()}
+        <button type="button" class="btn-ink page-head__add" onclick="openQuickAdd('expense')">${icon("plus", 18)}<span>${t("add_expense")}</span></button>
+      </div>
+    </header>
 
-    <!-- Sélecteur de mois (segment control) -->
-    <div class="segment-control" style="margin-bottom:24px">
-      <button class="segment-btn" onclick="changeMonth(-1)" aria-label="${t("prev_month")}">←</button>
-      <button class="segment-btn segment-btn--active">${monthsArr[txFilterMonth]} ${txFilterYear}</button>
-      <button class="segment-btn" onclick="changeMonth(1)" aria-label="${t("next_month")}">→</button>
-    </div>
-
-    <!-- KPI mini-grid -->
-    <div class="kpi-grid" style="grid-template-columns:repeat(3,1fr);margin-bottom:24px">
-      <div class="kpi-card">
-        <div class="kpi-card__label">${t("dash_month_income")}</div>
-        <div class="kpi-card__value kpi-card__value--accent" style="font-size:clamp(28px,2.5vw,36px)">${fmtMoney(totals.income)}</div>
-      </div>
-      <div class="kpi-card">
-        <div class="kpi-card__label">${t("dash_month_expenses")}</div>
-        <div class="kpi-card__value" style="font-size:clamp(28px,2.5vw,36px)">${fmtMoney(totals.expense)}</div>
-      </div>
-      <div class="kpi-card">
-        <div class="kpi-card__label">${t("dash_month_balance")}</div>
-        <div class="kpi-card__value ${totals.balance >= 0 ? 'kpi-card__value--accent' : 'kpi-card__value--warn'}" style="font-size:clamp(28px,2.5vw,36px)">${totals.balance >= 0 ? "+" : ""}${fmtMoney(totals.balance)}</div>
-      </div>
-    </div>
-
-    <!-- Bannière si paiements de carte mal classés -->
     ${(() => {
       const misclass = detectMisclassifiedCardPayments();
       if (misclass.length === 0) return "";
-      return `<div class="serene-card" style="margin-bottom:20px;border-left:4px solid var(--status-red);padding:16px 20px">
-        <div style="display:flex;gap:16px;align-items:center;flex-wrap:wrap">
-          <div style="flex:1;min-width:220px">
-            <div class="kicker kicker--small" style="color:var(--status-red);margin-bottom:4px">ATTENTION</div>
-            <div style="font-family:var(--font-heading);font-size:18px;letter-spacing:-0.01em;margin-bottom:4px">${t("fix_card_pmt_title", { n: misclass.length, s: misclass.length > 1 ? "s" : "" })}</div>
-            <div style="font-size:13px;color:var(--text2)">${t("fix_card_pmt_desc")}</div>
-          </div>
-          <button class="btn-pill" onclick="runFixCardPayments()">${icon("refresh", 14)} ${t("fix_card_pmt_action", { n: misclass.length })}</button>
+      return `<div class="notice notice--red">
+        <div class="notice__body">
+          <span class="pill pill--red">${t("attention")}</span>
+          <div class="notice__title">${t("fix_card_pmt_title", { n: misclass.length, s: misclass.length > 1 ? "s" : "" })}</div>
+          <div class="notice__text">${t("fix_card_pmt_desc")}</div>
         </div>
+        <button type="button" class="btn-outline" onclick="runFixCardPayments()">${icon("refresh", 16)} ${t("fix_card_pmt_action", { n: misclass.length })}</button>
       </div>`;
     })()}
 
-    <!-- Filtres Serene -->
-    <div class="tx-filters">
-      <div class="search-box" style="flex:1;min-width:180px">
-        <span style="color:var(--text3);display:flex">${icon("search", 16)}</span>
-        <input type="text" placeholder="${t("search")}" value="${esc(txSearchQuery)}" oninput="setTxSearch(this.value)"/>
+    <div class="filter-bar">
+      <div class="filter-chips" role="group" aria-label="${escAttr(t("tx_filter_type"))}">
+        ${chip("all", t("filter_all"), txFilterType === "all" && !isNone)}
+        ${chip("expense", t("filter_expenses"), txFilterType === "expense")}
+        ${chip("income", t("filter_incomes"), txFilterType === "income")}
+        ${chip("transfer", t("filter_transfers"), txFilterType === "transfer")}
+        ${chip("_none", t("filter_uncategorized"), isNone)}
       </div>
-      <select class="tx-filter-select" onchange="setTxFilterType(this.value)">
-        <option value="all" ${txFilterType==="all"?"selected":""}>— ${t("tx_filter_type")} —</option>
-        <option value="expense" ${txFilterType==="expense"?"selected":""}>${t("tx_type_expense")}</option>
-        <option value="income" ${txFilterType==="income"?"selected":""}>${t("tx_type_income")}</option>
-        <option value="transfer" ${txFilterType==="transfer"?"selected":""}>${t("tx_type_transfer")}</option>
-      </select>
-      <select class="tx-filter-select" onchange="setTxFilterAccount(this.value)">
-        <option value="all" ${txFilterAccount==="all"?"selected":""}>— ${t("tx_filter_account")} —</option>
-        ${accounts.map(a => `<option value="${a.id}" ${txFilterAccount===a.id?"selected":""}>${esc(a.name)}</option>`).join("")}
-      </select>
-      <select class="tx-filter-select" onchange="setTxFilterCategory(this.value)">
-        <option value="all" ${txFilterCategory==="all"?"selected":""}>— ${t("tx_filter_category")} —</option>
-        ${categories.map(c => `<option value="${c.id}" ${txFilterCategory===c.id?"selected":""}>${tCategoryName(c)}</option>`).join("")}
-      </select>
-      ${(txFilterType !== "all" || txFilterAccount !== "all" || txFilterCategory !== "all" || txSearchQuery) ? `
-        <button class="action-btn" onclick="resetTxFilters()" title="${t("tx_filter_reset")}" style="flex-shrink:0">${icon("x", 14)}</button>
-      ` : ""}
+      <div class="filter-row">
+        <label class="search-field">
+          ${icon("search", 18)}
+          <span class="sr-only">${t("search")}</span>
+          <input type="text" placeholder="${escAttr(t("search"))}" value="${escAttr(txSearchQuery)}" oninput="setTxSearchDebounced(this.value)"/>
+        </label>
+        <label class="sr-only" for="tx-f-acc">${t("tx_filter_account")}</label>
+        <select id="tx-f-acc" class="filter-select" onchange="setTxFilterAccount(this.value)">
+          <option value="all" ${txFilterAccount === "all" ? "selected" : ""}>${t("tx_filter_account")}</option>
+          ${accounts.map(a => `<option value="${a.id}" ${txFilterAccount === a.id ? "selected" : ""}>${esc(a.name)}</option>`).join("")}
+        </select>
+        <label class="sr-only" for="tx-f-cat">${t("tx_filter_category")}</label>
+        <select id="tx-f-cat" class="filter-select" onchange="setTxFilterCategory(this.value)">
+          <option value="all" ${!catActive ? "selected" : ""}>${t("tx_filter_category")}</option>
+          ${categories.map(c => `<option value="${c.id}" ${txFilterCategory === c.id ? "selected" : ""}>${esc(tCategoryName(c))}</option>`).join("")}
+        </select>
+        ${(txFilterType !== "all" || txFilterAccount !== "all" || txFilterCategory !== "all" || txSearchQuery) ? `
+          <button type="button" class="icon-btn-round" onclick="resetTxFilters()" aria-label="${escAttr(t("tx_filter_reset"))}" title="${escAttr(t("tx_filter_reset"))}">${icon("x", 18)}</button>` : ""}
+      </div>
     </div>
 
-    <!-- Compteur résultats -->
-    <div style="font-family:var(--font-mono);font-size:11px;letter-spacing:0.14em;text-transform:uppercase;color:var(--text3);margin-bottom:14px">${t("tx_filter_results", { n: filtered.length, s: filtered.length > 1 ? "s" : "" })}</div>`;
+    <div class="result-count" aria-live="polite">${t("tx_filter_results", { n: filtered.length, s: filtered.length > 1 ? "s" : "" })}</div>`;
 
   if (filtered.length === 0) {
-    h += `<div class="empty">
-      <div style="margin-bottom:12px;color:var(--text3);display:flex;justify-content:center">${icon("clipboard", 48)}</div>
-      ${transactions.length === 0 ? t("tx_no_tx_first") : t("tx_no_tx")}
+    h += `<div class="card td-empty">
+      <p>${transactions.length === 0 ? t("tx_no_tx_first") : t("tx_no_tx")}</p>
+      <button type="button" class="btn-ink" onclick="openQuickAdd('expense')">${icon("plus", 18)} ${t("add_expense")}</button>
     </div>`;
   } else {
-    // Groupe les transactions par date
-    const byDate = {};
-    filtered.forEach(tx => {
-      const d = tx.date || "0000-00-00";
-      if (!byDate[d]) byDate[d] = [];
-      byDate[d].push(tx);
-    });
-    const dates = Object.keys(byDate).sort((a, b) => b.localeCompare(a));
-
-    h += `<div class="tx-list-v2">`;
-    dates.forEach(date => {
-      const dayTxs = byDate[date];
-      const dayTotal = dayTxs.reduce((s, tx) => {
-        if (tx.type === "income") return s + Number(tx.amount || 0);
-        if (tx.type === "expense") return s - Number(tx.amount || 0);
-        return s;
-      }, 0);
-      h += `<div class="tx-day-group">
-        <div class="tx-day-header">
-          <span class="tx-day-date">${fmtDateLong(date)}</span>
-          <span class="tx-day-total" style="color:${dayTotal >= 0 ? 'var(--status-green)' : 'var(--status-red)'}">${dayTotal >= 0 ? "+" : ""}${fmtMoney(dayTotal)}</span>
-        </div>
-        <div class="tx-day-list">`;
-      dayTxs.forEach(tx => {
-        const cat = categories.find(c => c.id === tx.categoryId);
-        const acc = accounts.find(a => a.id === tx.accountId);
-        const toAcc = accounts.find(a => a.id === tx.toAccountId);
-        const sign = tx.type === "income" ? "+" : tx.type === "expense" ? "−" : "";
-        const color = tx.type === "income" ? "var(--status-green)" : tx.type === "expense" ? "var(--status-red)" : "var(--text2)";
-        const catColor = cat?.color || "var(--text3)";
-        const typeLabel = tx.type === "transfer" ? t("tx_type_transfer") : "";
-        h += `<div class="tx-item" onclick="openTransactionModal('${tx.id}')" role="button" tabindex="0" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();openTransactionModal('${tx.id}')}">
-          <div class="tx-item__body">
-            <div class="tx-item__top">
-              <span class="tx-item__desc">${esc(tx.description || tCategoryName(cat) || "—")}</span>
-              <span class="tx-item__amount" style="color:${color}">${sign}${fmtMoney(tx.amount)}</span>
-            </div>
-            <div class="tx-item__bottom">
-              ${cat ? `<span class="tx-pill" style="background:${catColor}15;color:${catColor};border-color:${catColor}40">${esc(tCategoryName(cat))}</span>` : typeLabel ? `<span class="tx-pill" style="background:var(--surface2);color:var(--text2)">${typeLabel}</span>` : ""}
-              <span class="tx-account-name">${tx.type === "transfer" ? `${acc ? esc(acc.name) : "Externe"}${toAcc ? ` → ${esc(toAcc.name)}` : ""}` : esc(acc?.name || "")}</span>
-            </div>
-          </div>
-          <div class="menu-wrap" onclick="event.stopPropagation()">
-            <button class="dots-btn" onclick="toggleDrop('tx${tx.id}')" aria-label="${t("actions")}">${icon("more-vertical", 16)}</button>
-            <div class="dropdown" id="drop-tx${tx.id}">
-              <button onclick="openTransactionModal('${tx.id}');closeAllDrops()">${icon("pencil", 14)} ${t("edit")}</button>
-              <div class="sep"></div>
-              <button style="color:var(--status-red)" onclick="askDelete('transactions','${tx.id}','${esc(tx.description || "?")}');closeAllDrops()">${icon("trash", 14)} ${t("delete")}</button>
-            </div>
-          </div>
-        </div>`;
-      });
-      h += `</div></div>`;
-    });
-    h += `</div>`;
+    h += `<div class="card tx-card">${renderTxGroups(filtered)}</div>`;
   }
   return h + `</div>`;
+}
+
+function setTxQuickFilter(key) {
+  if (key === "_none") { txFilterType = "all"; txFilterCategory = "_none"; }
+  else {
+    txFilterType = key;
+    if (txFilterCategory === "_none") txFilterCategory = "all";
+  }
+  renderPage();
+}
+
+let _txSearchTimer = null;
+function setTxSearchDebounced(v) {
+  clearTimeout(_txSearchTimer);
+  _txSearchTimer = setTimeout(() => {
+    txSearchQuery = v;
+    renderPage();
+    const input = document.querySelector(".search-field input");
+    if (input) { input.focus(); input.setSelectionRange(v.length, v.length); }
+  }, 250);
 }
 
 // Formateur de date long : "jeudi 5 mars"
@@ -814,6 +621,7 @@ function openTransactionModal(id) {
     <div id="tx-form-content"></div>
 
     <div class="modal-actions">
+      ${tx ? `<button class="btn-cancel btn-danger-text" style="margin-right:auto" onclick="askDelete('transactions','${tx.id}','${esc(tx.description || "?")}')">${icon("trash", 16)} ${t("delete")}</button>` : ""}
       <button class="btn-cancel" onclick="closeModal()">${t("cancel")}</button>
       <button class="btn btn-primary" onclick="saveTransaction('${id || ""}')">${t("save")}</button>
     </div>
@@ -1135,17 +943,17 @@ function initDashCharts() {
   if (typeof Chart === "undefined") return;
 
   const isDark = document.body.classList.contains("dark");
-  // Palette Bright & Clear (Emeraude + Orange)
-  const inkColor    = isDark ? "#f8fafc" : "#0f172a";
-  const mutedColor  = isDark ? "#94a3b8" : "#64748b";
-  const sageColor   = isDark ? "#34d399" : "#10b981";
-  const warnColor   = isDark ? "#fb923c" : "#f97316";
-  const cardBg      = isDark ? "#111827" : "#ffffff";
-  const gridColor   = isDark ? "rgba(255,255,255,0.06)" : "rgba(15,23,42,0.06)";
+  // Palette « Aujourd'hui » : revenus en vert forêt, dépenses en encre (pas de rouge)
+  const inkColor    = isDark ? "#EDEBE6" : "#17181B";
+  const mutedColor  = isDark ? "#A9ADA8" : "#5E6168";
+  const sageColor   = isDark ? "#4FB38A" : "#1E6B4E";
+  const warnColor   = isDark ? "#8F938E" : "#B8B2A6";
+  const cardBg      = isDark ? "#1B1E1C" : "#FFFFFF";
+  const gridColor   = isDark ? "rgba(237,235,230,0.08)" : "rgba(23,24,27,0.06)";
 
   Chart.defaults.color = mutedColor;
-  Chart.defaults.font.family = "Inter, system-ui, sans-serif";
-  Chart.defaults.font.size = 11;
+  Chart.defaults.font.family = "Figtree, system-ui, sans-serif";
+  Chart.defaults.font.size = 12;
 
   // ── Doughnut : répartition des dépenses par catégorie (mois courant) ──
   const catCanvas = document.getElementById("chart-categories");
@@ -1192,7 +1000,7 @@ function initDashCharts() {
         }
       });
     } else {
-      catCanvas.parentElement.innerHTML = `<div style="display:flex;align-items:center;justify-content:center;height:100%;color:var(--text3);font-size:13px">Aucune dépense ce mois-ci</div>`;
+      catCanvas.parentElement.innerHTML = `<div style="display:flex;align-items:center;justify-content:center;height:100%;color:var(--text2);font-size:14px">${t("no_expense_month")}</div>`;
     }
   }
 
@@ -1206,7 +1014,7 @@ function initDashCharts() {
       const e = monthEnd(m.year, m.month);
       const totals = getPeriodTotals(s, e);
       months.push({
-        label: (uiLang === "es" ? MONTHS_ES : MONTHS_FR)[m.month].slice(0, 3) + " " + String(m.year).slice(-2),
+        label: new Date(m.year, m.month, 15).toLocaleDateString(uiLang === "es" ? "es-ES" : "fr-CA", { month: "short" }) + " " + String(m.year).slice(-2),
         income: totals.income,
         expense: totals.expense
       });
@@ -1265,7 +1073,7 @@ function initDashCharts() {
         return s + initial + delta;
       }, 0);
       months.push({
-        label: (uiLang === "es" ? MONTHS_ES : MONTHS_FR)[m.month].slice(0, 3) + " " + String(m.year).slice(-2),
+        label: new Date(m.year, m.month, 15).toLocaleDateString(uiLang === "es" ? "es-ES" : "fr-CA", { month: "short" }) + " " + String(m.year).slice(-2),
         balance
       });
     }
@@ -1359,7 +1167,7 @@ function openCategoryDetailModal(categoryId) {
               </div>
               <div class="tx-item__bottom">
                 <span class="tx-account-name">${fmtDateLong(tx.date)} · ${esc(acc?.name || "")}</span>
-                ${tx.notes ? `<span style="color:var(--text2);font-style:italic;font-size:11px">📝 ${esc(tx.notes)}</span>` : ""}
+                ${tx.notes ? `<span style="color:var(--text2);font-style:italic;font-size:12px">${icon("file-text", 12)} ${esc(tx.notes)}</span>` : ""}
               </div>
             </div>
             <button class="action-btn action-btn--primary" onclick="event.stopPropagation();editTxFromModal('${tx.id}','cat','${categoryId}')" title="${t("edit")}" aria-label="${t("edit")}">${icon("pencil", 14)}</button>
@@ -1374,92 +1182,112 @@ function openCategoryDetailModal(categoryId) {
 // PAGE BUDGET
 // ═══════════════════════════════════════════════════════════════
 
+let budgetTab = "limits"; // "limits" | "trends"
+
 function renderBudgetPage() {
   const expCats = categories.filter(c => c.type === "expense");
   const start = monthStart(txFilterYear, txFilterMonth);
   const end = monthEnd(txFilterYear, txFilterMonth);
-  const monthsArr = uiLang === "es" ? MONTHS_ES : MONTHS_FR;
 
-  // Calcul des dépenses par catégorie pour le mois courant
   const spendByCat = {};
   transactions.filter(tx => tx.type === "expense" && tx.date >= start && tx.date <= end).forEach(tx => {
     const k = tx.categoryId || "_none";
     spendByCat[k] = (spendByCat[k] || 0) + Number(tx.amount || 0);
   });
-
-  const totalLimit = budgets.reduce((s, b) => s + Number(b.monthlyLimit || 0), 0);
-  const totalSpent = budgets.reduce((s, b) => s + (spendByCat[b.categoryId] || 0), 0);
+  const activeBudgets = budgets.filter(b => expCats.some(c => c.id === b.categoryId));
+  const totalLimit = activeBudgets.reduce((s, b) => s + Number(b.monthlyLimit || 0), 0);
+  const totalSpent = activeBudgets.reduce((s, b) => s + (spendByCat[b.categoryId] || 0), 0);
   const overall = getBudgetStatus(totalSpent, totalLimit);
 
   let h = `<div class="serene-page">
-    <div class="serene-hero-header">
+    <header class="page-head">
       <div>
-        <div class="kicker" style="margin-bottom:10px">${monthsArr[txFilterMonth].toUpperCase()} ${txFilterYear}</div>
-        <h1 class="serene-hero-h1" style="margin:0">${t("budget_title")}</h1>
-        <p style="margin:8px 0 0;color:var(--text2);font-size:15px;max-width:480px">${t("budget_subtitle")}</p>
+        <h1 class="page-title">${t("budget_title")}</h1>
+        <p class="page-sub">${t("budget_subtitle")}</p>
       </div>
-      <div class="segment-control">
-        <button class="segment-btn" onclick="changeMonth(-1)">←</button>
-        <button class="segment-btn segment-btn--active">${monthsArr[txFilterMonth]} ${txFilterYear}</button>
-        <button class="segment-btn" onclick="changeMonth(1)">→</button>
-      </div>
+      <div class="page-head__actions">${renderMonthPicker()}</div>
+    </header>
+    <div class="seg-tabs" role="tablist">
+      <button type="button" role="tab" aria-selected="${budgetTab === "limits"}" class="seg-tab ${budgetTab === "limits" ? "is-on" : ""}" onclick="budgetTab='limits';renderPage()">${t("budget_tab_limits")}</button>
+      <button type="button" role="tab" aria-selected="${budgetTab === "trends"}" class="seg-tab ${budgetTab === "trends" ? "is-on" : ""}" onclick="budgetTab='trends';renderPage()">${t("budget_tab_trends")}</button>
     </div>`;
 
-  // Résumé global du budget
-  if (budgets.length > 0) {
-    h += `<div class="serene-card serene-card--lg" style="margin-bottom:24px">
-      <div style="display:flex;justify-content:space-between;align-items:end;gap:24px;flex-wrap:wrap;margin-bottom:18px">
-        <div>
-          <div class="kicker kicker--small" style="margin-bottom:6px">${t("budget_total_spent")}</div>
-          <div class="display-num display-num--lg" style="color:${overall.color}">${fmtMoney(totalSpent)}</div>
-          <div style="font-size:12px;color:var(--text3);margin-top:6px">/ ${fmtMoney(totalLimit)} ${t("budget_total_limit").toLowerCase()}</div>
-        </div>
-        <div style="text-align:right">
-          <div class="kicker kicker--small" style="margin-bottom:6px">${totalSpent <= totalLimit ? t("budget_remaining") : t("budget_exceeded")}</div>
-          <div class="display-num display-num--md" style="color:${totalSpent <= totalLimit ? 'var(--accent)' : 'var(--status-red)'}">${fmtMoney(Math.abs(totalLimit - totalSpent))}</div>
-        </div>
-      </div>
-      <div class="budget-progress__bar"><div class="budget-progress__fill" style="width:${Math.min(overall.pct, 100)}%;background:${overall.color}"></div></div>
+  if (budgetTab === "trends") {
+    h += `<div class="trend-grid">
+      <section class="card chart-box">
+        <h2 class="side-card__title">${t("dash_top_categories")}</h2>
+        <div class="chart-box__canvas chart-box__canvas--tall"><canvas id="chart-categories" aria-label="${escAttr(t("dash_top_categories"))}" role="img"></canvas></div>
+      </section>
+      <section class="card chart-box">
+        <h2 class="side-card__title">${t("budget_trend_flow")}</h2>
+        <div class="chart-box__canvas"><canvas id="chart-income-expense" aria-label="${escAttr(t("budget_trend_flow"))}" role="img"></canvas></div>
+      </section>
+      <section class="card chart-box chart-box--wide">
+        <h2 class="side-card__title">${t("budget_trend_balance")}</h2>
+        <div class="chart-box__canvas"><canvas id="chart-balance-trend" aria-label="${escAttr(t("budget_trend_balance"))}" role="img"></canvas></div>
+      </section>
     </div>`;
+    return h + `</div>`;
   }
 
-  // Liste de toutes les catégories de dépenses
-  h += `<div class="budget-list">`;
-  expCats.forEach(cat => {
+  if (activeBudgets.length > 0) {
+    const left = totalLimit - totalSpent;
+    h += `<section class="card bud-summary">
+      <div class="bud-summary__row">
+        <div>
+          <div class="bud-summary__label">${left >= 0 ? t("budget_remaining") : t("budget_exceeded")}</div>
+          <div class="bud-summary__amount ${left < 0 ? "neg" : ""}">${left < 0 ? "− " : ""}${fmtMoney0(Math.abs(left))}</div>
+        </div>
+        <div class="bud-summary__side">${t("spent_of_planned", { a: fmtMoney0(totalSpent), b: fmtMoney0(totalLimit) })}</div>
+      </div>
+      ${budgetBar(overall.pct)}
+    </section>`;
+  }
+
+  if (expCats.length === 0) {
+    h += `<div class="card td-empty"><p>${t("cat_none_yet")}</p>
+      <button type="button" class="btn-ink" onclick="navTo('categories')">${t("manage_categories")}</button></div>`;
+    return h + `</div>`;
+  }
+
+  // Catégories avec limite d'abord (par % décroissant), puis sans limite
+  const rows = expCats.map(cat => {
     const budget = budgets.find(b => b.categoryId === cat.id);
     const spent = spendByCat[cat.id] || 0;
-    const limit = budget?.monthlyLimit || 0;
-    const status = getBudgetStatus(spent, limit);
-    const hasbudget = !!budget;
+    const limit = Number(budget?.monthlyLimit || 0);
+    return { cat, budget, spent, limit, status: getBudgetStatus(spent, limit) };
+  }).sort((a, b) => (!!b.budget - !!a.budget) || (b.status.pct - a.status.pct) || (b.spent - a.spent));
 
-    h += `<div class="budget-row budget-row--clickable" style="border-left:4px solid ${cat.color || 'var(--text3)'}" onclick="openCategoryDetailModal('${cat.id}')" role="button" tabindex="0" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();openCategoryDetailModal('${cat.id}')}" title="Voir les transactions">
-      <div class="budget-row__head">
-        <div class="budget-row__name-block">
-          <div class="budget-row__icon" style="color:${cat.color};background:${cat.color}15">${icon(cat.icon || "folder", 16)}</div>
-          <div style="min-width:0">
-            <div class="budget-row__name">${tCategoryName(cat)}</div>
-            <div class="budget-row__sub">
-              ${hasbudget ? `${fmtMoney(spent)} / ${fmtMoney(limit)}` : `${fmtMoney(spent)} · ${t("budget_no_limit")}`}
-            </div>
-          </div>
-        </div>
-        <div class="budget-row__actions" onclick="event.stopPropagation()">
-          ${hasbudget ? `
-            <span class="budget-row__status" style="color:${status.color}">${status.pct.toFixed(0)}%</span>
-            <button class="action-btn" onclick="openBudgetModal('${cat.id}')" title="${t("budget_edit")}">${icon("pencil", 14)}</button>
-            <button class="action-btn action-btn--danger" onclick="removeBudget('${budget.id}', '${esc(tCategoryName(cat))}')" title="${t("budget_remove")}">${icon("trash", 14)}</button>
-          ` : `
-            <button class="btn-pill" style="padding:6px 14px;font-size:12px" onclick="openBudgetModal('${cat.id}')">${icon("plus", 12)} ${t("budget_set_limit")}</button>
-          `}
-        </div>
-        <span class="budget-row__chevron" aria-hidden="true">${icon("chevron-right", 16)}</span>
-      </div>
-      ${hasbudget ? `<div class="budget-progress__bar" style="margin-top:10px"><div class="budget-progress__fill" style="width:${Math.min(status.pct, 100)}%;background:${status.color}"></div></div>` : ""}
+  h += `<div class="card bud-list-card">`;
+  rows.forEach(({ cat, budget, spent, limit, status }) => {
+    const left = limit - spent;
+    h += `<div class="bud-row">
+      <button type="button" class="bud-row__main" onclick="openCategoryDetailModal('${cat.id}')">
+        <span class="tx-row__badge" aria-hidden="true">${icon(cat.icon || "folder", 18)}</span>
+        <span class="bud-row__body">
+          <span class="bud-row__top">
+            <span class="bud-row__name">${esc(tCategoryName(cat))}</span>
+            <span class="bud-row__amt">${budget ? t("x_of_y", { a: fmtMoneyShort(spent), b: fmtMoneyShort(limit) }) : fmtMoneyShort(spent)}</span>
+          </span>
+          ${budget ? `${budgetBar(status.pct)}
+            <span class="bud-row__left ${left < 0 ? "neg" : status.status === "watch" ? "warn" : ""}">${left >= 0 ? t("remaining_x", { x: fmtMoneyShort(left) }) : t("over_x", { x: fmtMoneyShort(-left) })} · ${Math.round(status.pct)} %</span>`
+          : `<span class="bud-row__left">${t("budget_no_limit")}</span>`}
+        </span>
+      </button>
+      ${budget
+        ? `<button type="button" class="icon-btn-round icon-btn-round--sm" onclick="openBudgetModal('${cat.id}')" aria-label="${escAttr(t("budget_edit"))} — ${escAttr(tCategoryName(cat))}" title="${escAttr(t("budget_edit"))}">${icon("pencil", 16)}</button>`
+        : `<button type="button" class="btn-outline btn-outline--sm" onclick="openBudgetModal('${cat.id}')">${icon("plus", 16)} ${t("budget_set_limit")}</button>`}
     </div>`;
   });
-  h += `</div>`;
-
+  h += `</div>
+    <div class="page-foot"><button type="button" class="link-btn" onclick="navTo('categories')">${icon("tag", 16)} ${t("manage_categories")}</button></div>`;
   return h + `</div>`;
+}
+
+// Barre de progression : vert → jaune à 80 % → rouge au-delà de 100 %
+function budgetBar(pct) {
+  const tone = pct > 100 ? "red" : pct >= 80 ? "yellow" : "green";
+  return `<span class="bar" aria-hidden="true"><span class="bar__fill bar__fill--${tone}" style="width:${Math.min(pct, 100).toFixed(1)}%"></span></span>`;
 }
 
 function openBudgetModal(categoryId) {
@@ -1483,6 +1311,7 @@ function openBudgetModal(categoryId) {
       <input id="b-limit" type="number" step="any"min="0" value="${existing?.monthlyLimit || ""}" placeholder="ex: 500" autofocus/>
     </label>
     <div class="modal-actions">
+      ${existing ? `<button class="btn-cancel btn-danger-text" style="margin-right:auto" onclick="removeBudget('${existing.id}','${esc(tCategoryName(cat))}')">${t("remove_limit")}</button>` : ""}
       <button class="btn-cancel" onclick="closeModal()">${t("cancel")}</button>
       <button class="btn btn-primary" onclick="saveBudget('${categoryId}','${existing?.id || ""}')">${t("save")}</button>
     </div>
@@ -1517,179 +1346,60 @@ async function removeBudget(budgetId, catName) {
 // ═══════════════════════════════════════════════════════════════
 
 function renderSubscriptionsPage() {
-  const monthsArr = uiLang === "es" ? MONTHS_ES : MONTHS_FR;
-  const start = monthStart(txFilterYear, txFilterMonth);
-  const end = monthEnd(txFilterYear, txFilterMonth);
-
+  const upcoming = getUpcomingCharges(); // exclut les ignorés, trié par prochaine date
   const detected = detectRecurringTransactions();
-
-  // Pour chaque abonnement détecté : trouve les transactions qui tombent dans le mois courant
-  const withMonthData = detected.map(sub => {
-    const monthTxs = sub.transactionIds
-      .map(id => transactions.find(tx => tx.id === id))
-      .filter(tx => tx && tx.date >= start && tx.date <= end);
-    const monthAmount = monthTxs.reduce((s, tx) => s + Number(tx.amount || 0), 0);
-    return {
-      ...sub,
-      monthTxs,
-      monthAmount,
-      hasMonthCharge: monthTxs.length > 0
-    };
-  });
-
-  // Sépare : confirmés, ignorés, suggestions — en ne gardant que ceux ayant un prélèvement ce mois-ci
-  const confirmed = [];
-  const ignored = [];
-  const suggestions = [];
-  withMonthData.forEach(sub => {
-    if (!sub.hasMonthCharge) return; // Hide subs that have no charge this month
-    const state = getSubscriptionState(sub.key);
-    if (state?.status === "confirmed") confirmed.push({ ...sub, _state: state });
-    else if (state?.status === "ignored") ignored.push({ ...sub, _state: state });
-    else suggestions.push(sub);
-  });
-
-  // Total = somme réelle des montants prélevés ce mois-ci (confirmés + suggestions)
-  const monthTotal = [...confirmed, ...suggestions].reduce((s, sub) => s + sub.monthAmount, 0);
-  const confirmedTotal = confirmed.reduce((s, sub) => s + sub.monthAmount, 0);
+  const ignored = detected.filter(s => getSubscriptionState(s.key)?.status === "ignored");
+  const monthly = upcoming.reduce((s, sub) => s + Number(sub.monthlyCost || 0), 0);
 
   let h = `<div class="serene-page">
-    <!-- Hero -->
-    <div class="serene-hero-header">
+    <header class="page-head">
       <div>
-        <div class="kicker" style="margin-bottom:10px">${monthsArr[txFilterMonth].toUpperCase()} ${txFilterYear}</div>
-        <h1 class="serene-hero-h1" style="margin:0">${t("sub_title")}</h1>
-        <p style="max-width:560px;font-size:15px;color:var(--text2);margin:8px 0 0">${t("sub_subtitle")}</p>
+        <h1 class="page-title">${t("sub_title")}</h1>
+        <p class="page-sub">${upcoming.length ? t("subs_monthly_sentence", { x: `<strong>${fmtMoney0(monthly)}</strong>` }) : t("sub_subtitle")}</p>
       </div>
-      <div class="segment-control">
-        <button class="segment-btn" onclick="changeMonth(-1)">←</button>
-        <button class="segment-btn segment-btn--active">${monthsArr[txFilterMonth]} ${txFilterYear}</button>
-        <button class="segment-btn" onclick="changeMonth(1)">→</button>
-      </div>
-    </div>
+    </header>`;
 
-    <!-- Summary 3 colonnes : total DU MOIS -->
-    <div class="sub-summary">
-      <div>
-        <div class="kicker kicker--small" style="margin-bottom:6px">${t("sub_month_total")}</div>
-        <div class="display-num" style="font-size:clamp(40px,5vw,72px)">${fmtMoney(monthTotal)}</div>
-        <div style="font-size:12px;color:var(--text3);margin-top:6px">${monthsArr[txFilterMonth]} ${txFilterYear} · ${confirmed.length + suggestions.length} prélèvement${(confirmed.length + suggestions.length) > 1 ? "s" : ""}</div>
-      </div>
-      <div>
-        <div class="kicker kicker--small" style="margin-bottom:6px">${t("sub_confirmed")}</div>
-        <div class="display-num display-num--md">${confirmed.length}</div>
-        <div style="font-size:12px;color:var(--text3);margin-top:4px">${fmtMoney(confirmedTotal)}</div>
-      </div>
-      <div>
-        <div class="kicker kicker--small" style="margin-bottom:6px">${t("sub_suggestions")}</div>
-        <div class="display-num display-num--md" style="color:var(--accent)">${suggestions.length}</div>
-        <div style="font-size:12px;color:var(--text3);margin-top:4px">${fmtMoney(monthTotal - confirmedTotal)}</div>
-      </div>
-    </div>`;
-
-  if (confirmed.length === 0 && suggestions.length === 0) {
-    h += `<div class="serene-card" style="text-align:center">
-      <div style="margin-bottom:16px;color:var(--text3);display:flex;justify-content:center">${icon("refresh", 48)}</div>
-      <p style="color:var(--text2)">${detected.length === 0 ? t("sub_none_detected") : t("sub_not_this_month")}</p>
-    </div>`;
+  if (upcoming.length === 0) {
+    h += `<div class="card td-empty"><p>${t("sub_none_detected")}</p></div>`;
   } else {
-    if (confirmed.length > 0) {
-      h += renderSereneSubSection(t("sub_confirmed"), confirmed, "confirmed");
-    }
-    if (suggestions.length > 0) {
-      h += renderSereneSubSection(t("sub_suggestions"), suggestions, "suggestion");
-    }
-    if (ignored.length > 0) {
-      h += `<details style="margin-top:24px">
-        <summary style="cursor:pointer;font-family:var(--font-mono);font-size:11px;letter-spacing:0.14em;text-transform:uppercase;color:var(--text3);padding:12px 0">${t("sub_ignored")} (${ignored.length})</summary>` +
-        renderSereneSubSection("", ignored, "ignored") + `</details>`;
-    }
+    h += `<div class="card sub-card">${upcoming.map(sub => renderSubRow(sub, getSubscriptionState(sub.key))).join("")}</div>`;
   }
-
+  if (ignored.length > 0) {
+    h += `<details class="sub-ignored">
+      <summary>${t("sub_ignored")} (${ignored.length})</summary>
+      <div class="card sub-card">${ignored.map(sub => renderSubRow(sub, getSubscriptionState(sub.key))).join("")}</div>
+    </details>`;
+  }
   return h + `</div>`;
 }
 
-// Section Serene : titre kicker + liste de rows en grille
-function renderSereneSubSection(title, subs, kind) {
-  let h = title ? `<div class="kicker" style="margin:32px 0 16px">${title.toUpperCase()}</div>` : "";
-  h += `<ul style="list-style:none;margin:0;padding:0;border-top:1px solid var(--border)">`;
-  subs.forEach(sub => {
-    const cat = categories.find(c => c.id === sub.categoryId);
-    const freqLabel = t("sub_" + sub.frequency) || sub.frequency;
-    // Date du prélèvement de ce mois (le plus récent si plusieurs)
-    const monthChargeDate = sub.monthTxs && sub.monthTxs.length > 0
-      ? sub.monthTxs.sort((a,b) => (b.date || "").localeCompare(a.date || ""))[0].date
-      : sub.lastDate;
-    const chargeCount = sub.monthTxs ? sub.monthTxs.length : 1;
-    const displayAmount = sub.monthAmount !== undefined ? sub.monthAmount : sub.amount;
-
-    h += `<li class="sub-row sub-row--clickable" onclick="openSubscriptionDetailModal('${sub.key}')" role="button" tabindex="0" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();openSubscriptionDetailModal('${sub.key}')}" title="${t("sub_view_transactions")}">
-      <div class="sub-row__badge">${icon("refresh", 16)}</div>
-      <div>
-        <div class="sub-row__name">${esc(sub.name)}</div>
-        <div class="sub-row__meta">${freqLabel} · ${t("sub_charged_on").toLowerCase()} ${fmtDateShort(monthChargeDate)}${chargeCount > 1 ? ` · ${chargeCount} prélèvements` : ""}</div>
-      </div>
-      <div class="sub-row__cat-col">${cat ? esc(tCategoryName(cat)) : "—"}</div>
-      <div>
-        <div class="sub-row__amount-col">${fmtMoney(displayAmount)}</div>
-      </div>
-      <div class="sub-row__actions" onclick="event.stopPropagation()">
-        ${kind === "suggestion" ? `
-          <button class="action-btn action-btn--primary" onclick="confirmSubscription('${sub.key}','${esc(sub.name).replace(/'/g,"\\'")}','${sub.amount}','${sub.frequency}','${sub.accountId||""}','${sub.categoryId||""}')" title="${t("sub_confirm")}">${icon("check", 14)}</button>
-          <button class="action-btn" onclick="ignoreSubscription('${sub.key}','${esc(sub.name).replace(/'/g,"\\'")}')" title="${t("sub_ignore")}">${icon("x", 14)}</button>
-        ` : `
-          <button class="action-btn action-btn--danger" onclick="unconfirmSubscription('${sub._state?.id || ""}')" title="${t("sub_unconfirm")}">${icon("trash", 14)}</button>
-        `}
-      </div>
-    </li>`;
-  });
-  h += `</ul>`;
-  return h;
-}
-
-function renderSubSection(title, subs, kind) {
-  let h = title ? `<h3 class="cat-section__title" style="border-color:var(--accent);margin-top:20px">
-    <span style="color:var(--accent)">${icon("refresh", 14)}</span>
-    ${title}
-    <span class="cat-section__count">${subs.length}</span>
-  </h3>` : "";
-
-  h += `<div class="sub-list">`;
-  subs.forEach(sub => {
-    const cat = categories.find(c => c.id === sub.categoryId);
-    const acc = accounts.find(a => a.id === sub.accountId);
-    const freqLabel = t("sub_" + sub.frequency) || sub.frequency;
-
-    h += `<div class="sub-row sub-row--clickable" style="border-left:4px solid ${cat?.color || 'var(--text3)'}" onclick="openSubscriptionDetailModal('${sub.key}')" role="button" tabindex="0" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();openSubscriptionDetailModal('${sub.key}')}" title="${t("sub_view_transactions")}">
-      <div class="sub-row__main">
-        <div class="sub-row__name">${esc(sub.name)}</div>
-        <div class="sub-row__meta">
-          ${cat ? `<span class="tx-pill" style="background:${cat.color}15;color:${cat.color};border-color:${cat.color}40">${esc(tCategoryName(cat))}</span>` : ""}
-          <span>${freqLabel}</span>
-          <span>·</span>
-          <span>${sub.occurrences} ${t("sub_occurrences")}</span>
-          <span>·</span>
-          <span>${t("sub_last_charge")} ${fmtDateShort(sub.lastDate)}</span>
-        </div>
-      </div>
-      <div class="sub-row__amount-block">
-        <div class="sub-row__amount">${fmtMoney(sub.amount)}</div>
-        <div class="sub-row__monthly">≈ ${fmtMoney(sub.monthlyCost)}/mois</div>
-      </div>
-      <div class="sub-row__actions" onclick="event.stopPropagation()">
-        <button class="action-btn action-btn--primary" onclick="openSubscriptionDetailModal('${sub.key}')" title="${t("sub_view_transactions")}" aria-label="${t("sub_view_transactions")}">${icon("clipboard", 14)}</button>
-        ${kind === "suggestion" ? `
-          <button class="action-btn" onclick="confirmSubscription('${sub.key}','${esc(sub.name).replace(/'/g,"\\'")}','${sub.amount}','${sub.frequency}','${sub.accountId||""}','${sub.categoryId||""}')" title="${t("sub_confirm")}">${icon("check", 14)}</button>
-          <button class="action-btn" onclick="ignoreSubscription('${sub.key}','${esc(sub.name).replace(/'/g,"\\'")}')" title="${t("sub_ignore")}">${icon("x", 14)}</button>
-        ` : `
-          <button class="action-btn action-btn--danger" onclick="unconfirmSubscription('${sub._state?.id || ""}')" title="${t("sub_unconfirm")}">${icon("trash", 14)}</button>
-        `}
-      </div>
-      <span class="sub-row__chevron" aria-hidden="true">${icon("chevron-right", 16)}</span>
-    </div>`;
-  });
-  h += `</div>`;
-  return h;
+function renderSubRow(sub, state) {
+  const cat = categories.find(c => c.id === sub.categoryId);
+  const freqLabel = t("sub_" + sub.frequency) || sub.frequency;
+  const status = state?.status;
+  const nm = esc(sub.name).replace(/'/g, "\\'");
+  const soon = sub.inDays !== undefined && sub.inDays >= 0 && sub.inDays <= 5;
+  return `<div class="sub-line">
+    <button type="button" class="sub-line__main" onclick="openSubscriptionDetailModal('${sub.key}')">
+      <span class="tx-row__badge" aria-hidden="true">${icon(cat?.icon || "refresh", 18)}</span>
+      <span class="tx-row__body">
+        <span class="tx-row__name">${esc(sub.name)} ${status === "confirmed" ? "" : status === "ignored" ? "" : `<span class="pill pill--neutral">${t("sub_suggestions_one")}</span>`}</span>
+        <span class="tx-row__meta">${freqLabel}${sub.nextDate ? ` · ${t("next_charge", { d: fmtDayMonth(sub.nextDate) })}` : ""}${cat ? ` · ${esc(tCategoryName(cat))}` : ""}</span>
+      </span>
+      <span class="sub-line__amt">
+        ${soon ? `<span class="pill pill--yellow">${sub.inDays === 0 ? t("today_badge") : sub.inDays === 1 ? t("in_1_day") : t("in_n_days", { n: sub.inDays })}</span>` : ""}
+        <span class="tx-row__amount">${fmtMoneyShort(sub.amount)}</span>
+      </span>
+    </button>
+    <span class="sub-line__actions">
+      ${status === "confirmed"
+        ? `<button type="button" class="icon-btn-round icon-btn-round--sm" onclick="unconfirmSubscription('${state.id}')" aria-label="${escAttr(t("sub_unconfirm"))}" title="${escAttr(t("sub_unconfirm"))}">${icon("x", 16)}</button>`
+        : status === "ignored"
+        ? `<button type="button" class="icon-btn-round icon-btn-round--sm" onclick="unconfirmSubscription('${state.id}')" aria-label="${escAttr(t("sub_restore"))}" title="${escAttr(t("sub_restore"))}">${icon("undo", 16)}</button>`
+        : `<button type="button" class="icon-btn-round icon-btn-round--sm" onclick="confirmSubscription('${sub.key}','${nm}','${sub.amount}','${sub.frequency}','${sub.accountId || ""}','${sub.categoryId || ""}')" aria-label="${escAttr(t("sub_confirm"))}" title="${escAttr(t("sub_confirm"))}">${icon("check", 16)}</button>
+           <button type="button" class="icon-btn-round icon-btn-round--sm" onclick="ignoreSubscription('${sub.key}','${nm}')" aria-label="${escAttr(t("sub_ignore"))}" title="${escAttr(t("sub_ignore"))}">${icon("eye-off", 16)}</button>`}
+    </span>
+  </div>`;
 }
 
 // ═══════════════════════════════════════════════════════════════
@@ -1766,7 +1476,7 @@ function openSubscriptionDetailModal(subKey) {
               <div class="tx-item__bottom">
                 ${txCat ? `<span class="tx-pill" style="background:${txCat.color}15;color:${txCat.color};border-color:${txCat.color}40">${esc(tCategoryName(txCat))}</span>` : `<span class="tx-pill" style="background:var(--surface2);color:var(--text3)">— sans catégorie —</span>`}
                 <span class="tx-account-name">${fmtDateLong(tx.date)} · ${esc(acc?.name || "")}</span>
-                ${tx.notes ? `<span style="color:var(--text2);font-style:italic">📝 ${esc(tx.notes)}</span>` : ""}
+                ${tx.notes ? `<span style="color:var(--text2);font-style:italic">${icon("file-text", 12)} ${esc(tx.notes)}</span>` : ""}
               </div>
             </div>
             <button class="action-btn action-btn--primary" onclick="event.stopPropagation();editTxFromModal('${tx.id}','sub','${subKey}')" title="${t("edit")}" aria-label="${t("edit")}">${icon("pencil", 14)}</button>

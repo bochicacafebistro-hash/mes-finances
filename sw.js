@@ -2,7 +2,7 @@
  * Mes Finances — Service Worker (PWA)
  */
 
-const CACHE_VERSION = 'v4.0.0';
+const CACHE_VERSION = 'v5.0.0'; // design « Aujourd'hui »
 const CACHE_NAME = `mes-finances-${CACHE_VERSION}`;
 
 const APP_SHELL = [
@@ -18,6 +18,7 @@ const APP_SHELL = [
   '/js/centris-parser.js',
   '/js/duproprio-parser.js',
   '/js/house-page.js',
+  '/js/quick-add.js',
   '/js/sidebar.js',
   '/js/auth.js',
   '/js/firebase-listeners.js',

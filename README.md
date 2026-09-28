@@ -29,4 +29,4 @@ Une fois en ligne, ouvre l'app sur ton téléphone :
 - Firebase Firestore (BDD temps réel)
 - PWA installable (offline app shell)
 - i18n FR/ES intégré
-- Design system aligné (Fraunces + Inter, palette bordeaux)
+- Design « Aujourd'hui » (Bricolage Grotesque + Figtree, crème + vert forêt)
